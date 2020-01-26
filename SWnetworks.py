@@ -15,14 +15,18 @@ from keras import regularizers
 from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
+from blocksparse.matmul import BlocksparseMatMul
+import tensorflow as tf
 
 NUMBER_OF_ATTRIBUTES = 32
 NUMBER_OF_INSTANCES = 150
-PATH = 'brestcancer\wdbc.data'
+PATH = 'brestcancer/wdbc.data'
+
+
 
 def plot_training_history(history):
     # summarize history for accuracy
-    plt.plot(history.history['acc'])
+    plt.plot(history.history['accuracy'])
     plt.title('model accuracy')
     plt.ylabel('accuracy')
     plt.xlabel('epoch')
@@ -81,6 +85,20 @@ def get_model_dense():
                   loss='binary_crossentropy', metrics=['accuracy'])
     return model
 
+def test_model(model):
+    
+    #train model
+    history = model.fit(X_train, y_train, nb_epoch=100, verbose=1, 
+                        batch_size=100)
+    
+    #test
+    results = model.evaluate(X_test, y_test)
+    
+    print("Final test set loss {}".format(results[0]))
+    print("Final test set accuracy {}".format(results[1]))
+    
+    plot_training_history(history)
+
 if __name__ == "__main__":
     
     #load dataset
@@ -93,19 +111,7 @@ if __name__ == "__main__":
     #split to trainign and testing data
     X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2,
                                                         random_state=42)
-    
-    
     #get neural network
-    model = get_model_dense()
     
-    #train model
-    history = model.fit(X_train, y_train, nb_epoch=1000, verbose=1, batch_size=100)
     
-    #test
-    results = model.evaluate(X_test, y_test)
-    
-    print("Final test set loss {}".format(results[0]))
-    print("Final test set accuracy {}".format(results[1]))
-    
-    plot_training_history(history)
     
