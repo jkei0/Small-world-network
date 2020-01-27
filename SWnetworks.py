@@ -7,16 +7,19 @@ Created on Thu Jan 23 19:23:27 2020
 
 import csv
 import numpy as np
-from keras.models import Sequential
-from keras.layers import Dense, Dropout, LSTM
+from keras.models import Sequential, Model
+from keras.layers import add, Dense, Dropout, LSTM, Input, Lambda, concatenate
 from keras.optimizers import Adam, SGD
 from keras.utils import to_categorical
 from keras import regularizers
 from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
-from blocksparse.matmul import BlocksparseMatMul
-import tensorflow as tf
+#from blocksparse.matmul import BlocksparseMatMul
+#import tensorflow as tf
+from keras.utils.vis_utils import plot_model
+from IPython.display import SVG
+from keras.utils.vis_utils import model_to_dot
 
 NUMBER_OF_ATTRIBUTES = 32
 NUMBER_OF_INSTANCES = 150
@@ -26,7 +29,7 @@ PATH = 'brestcancer/wdbc.data'
 
 def plot_training_history(history):
     # summarize history for accuracy
-    plt.plot(history.history['accuracy'])
+    plt.plot(history.history['acc'])
     plt.title('model accuracy')
     plt.ylabel('accuracy')
     plt.xlabel('epoch')
@@ -39,6 +42,7 @@ def plot_training_history(history):
     plt.xlabel('epoch')
     plt.legend(['train'], loc='upper left')
     plt.show()
+    
 
 def classes_to_int(classes):
     le = preprocessing.LabelEncoder()
@@ -50,6 +54,7 @@ def classes_to_int(classes):
 def str_column_to_float(dataset, column):
     for row in dataset:
         row[column]=float(row[column].strip())
+        
 
 def load_csv():
     attList = []
@@ -73,6 +78,7 @@ def load_csv():
             
     return attributes, classes
 
+
 def get_model_dense():
     model = Sequential()
     model.add(Dense(output_dim=16, activation='relu', input_dim=30, init='uniform'))   
@@ -84,6 +90,50 @@ def get_model_dense():
     model.compile(optimizer='adam', 
                   loss='binary_crossentropy', metrics=['accuracy'])
     return model
+
+
+def model_skip_connection():
+    
+    # input tensor
+    inputs = Input(shape=(30,))
+    
+    #layers
+    output_1 = Dense(16, activation='relu', init='uniform')(inputs)
+    output_2 = Dense(16, activation='relu', init='uniform')(output_1)
+    z = add([output_1, output_2])
+    predictions = Dense(1, activation='sigmoid', init='uniform')(z)
+
+    
+    #create model
+    model = Model(inputs=inputs, outputs=predictions)
+    model.compile(optimizer='adam', 
+                  loss='binary_crossentropy', metrics=['accuracy'])
+    
+    return model
+    
+
+def skip_connection_layer():
+    inp = Input(shape=(30,), name='i1')
+    inp2 = Lambda(lambda x: x[:,1:2], name='i2')(inp)   # get the second neuron
+    
+    h1_out = Dense(1, activation='relu', name='h1', init='uniform')(inp2)  # only connected to the second neuron
+    h2_out = Dense(1, activation='relu', name='h2', init='uniform')(inp)  # connected to both neurons
+    h_out = concatenate([h1_out, h2_out])
+    
+    d1 = Dense(1, activation='relu', init='uniform')(h_out)
+    d2 = Dense(1, activation='relu', init='uniform')(inp2)
+    d_out = concatenate([d1, d2])
+    
+    out = Dense(1, activation='sigmoid', init='uniform')(d_out)
+    
+    
+    
+    model = Model(inp, out)
+    
+    model.compile(optimizer='adam', 
+                  loss='binary_crossentropy', metrics=['accuracy'])
+    return model
+    
 
 def test_model(model):
     
@@ -99,6 +149,7 @@ def test_model(model):
     
     plot_training_history(history)
 
+
 if __name__ == "__main__":
     
     #load dataset
@@ -112,6 +163,14 @@ if __name__ == "__main__":
     X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2,
                                                         random_state=42)
     #get neural network
+    model = skip_connection_layer()
     
+    model.summary()
+    plot_model(model, to_file='model_plot.png', show_shapes=True)
+    test_model(model)
+    
+    
+
+   
     
     
