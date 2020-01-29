@@ -7,6 +7,7 @@ Created on Thu Jan 23 19:23:27 2020
 
 import csv
 import numpy as np
+import keras.backend as K
 from keras.models import Sequential, Model
 from keras.layers import add, Dense, Dropout, LSTM, Input, Lambda, concatenate
 from keras.optimizers import Adam, SGD
@@ -16,10 +17,10 @@ from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 #from blocksparse.matmul import BlocksparseMatMul
-#import tensorflow as tf
+import tensorflow as tf
 from keras.utils.vis_utils import plot_model
-from IPython.display import SVG
-from keras.utils.vis_utils import model_to_dot
+import keras.initializers
+
 
 NUMBER_OF_ATTRIBUTES = 32
 NUMBER_OF_INSTANCES = 150
@@ -136,9 +137,9 @@ def skip_connection_layer():
     
 
 def test_model(model):
-    
+ 
     #train model
-    history = model.fit(X_train, y_train, nb_epoch=100, verbose=1, 
+    history = model.fit(X_train, y_train, epochs=200, verbose=0, 
                         batch_size=100)
     
     #test
@@ -148,7 +149,59 @@ def test_model(model):
     print("Final test set accuracy {}".format(results[1]))
     
     plot_training_history(history)
+    return history
 
+
+
+def small_model():
+    #input tensor
+    inp = Input(shape=(30,))
+    
+    #first layer
+    l1 = Dense(16, activation='relu')(inp)
+    d1 = Dropout(0.2)(l1)
+    
+    #second layer
+    mat = np.eye(16)
+    l2 = CustomConnected(16, connections=mat, activation='relu')(d1)
+
+    d2 = Dropout(0.2)(l2)
+    
+    #output node
+    mat = np.zeros((16,1))
+    out = CustomConnected(1, activation='sigmoid', connections=mat, name="output")(d2)
+    
+    model = Model(inp, out)
+    
+    model.compile(optimizer='adam', 
+                  loss='binary_crossentropy', metrics=['accuracy'])
+    return model
+
+
+class CustomConnected(Dense):
+    
+    def __init__(self, units, connections, **kwargs):
+        
+        # connection matrix
+        self.connections = connections
+        
+        super(CustomConnected, self).__init__(units,**kwargs)
+                
+    def call(self, inputs):
+        output = K.dot(inputs, self.kernel * self.connections)
+        if self.use_bias:
+            output = K.bias_add(output, self.bias)
+        if self.activation is not None:
+            output = self.activation(output)
+        return output
+    
+    def build(self, input_shape):
+        super(CustomConnected, self).build(input_shape)
+        weights = self.get_weights()
+        weights[0] = self.get_weights()[0] * self.connections
+        self.set_weights(weights)
+
+    
 
 if __name__ == "__main__":
     
@@ -163,11 +216,17 @@ if __name__ == "__main__":
     X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2,
                                                         random_state=42)
     #get neural network
-    model = skip_connection_layer()
+    model = small_model()
+    
+    s = model.get_weights()
     
     model.summary()
-    plot_model(model, to_file='model_plot.png', show_shapes=True)
-    test_model(model)
+    
+    history = test_model(model)
+    
+    weights = model.get_weights()
+    
+    aps = w[2] - s[2]
     
     
 
