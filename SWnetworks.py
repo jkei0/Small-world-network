@@ -5,21 +5,21 @@ Created on Thu Jan 23 19:23:27 2020
 @author: jonik
 """
 
-import csv
 import numpy as np
-import keras.backend as K
 from keras.models import Sequential, Model
 from keras.layers import add, Dense, Dropout, LSTM, Input, Lambda, concatenate
 from keras.optimizers import Adam, SGD
 from keras.utils import to_categorical
 from keras import regularizers
-from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
-import tensorflow as tf
 from keras.utils.vis_utils import plot_model
 import keras.initializers
 import networkx as nx
+import pydot
+
+import models
+import utils
 
 
 NUMBER_OF_ATTRIBUTES = 32
@@ -45,97 +45,6 @@ def plot_training_history(history):
     plt.show()
     
 
-def classes_to_int(classes):
-    le = preprocessing.LabelEncoder()
-    le.fit(classes)
-    y = le.transform(classes)
-    return y
-    
-
-def str_column_to_float(dataset, column):
-    for row in dataset:
-        row[column]=float(row[column].strip())
-        
-
-def load_csv():
-    attList = []
-    classList = []
-   
-    with open(PATH, 'r') as csvfile:
-        reader = csv.reader(csvfile, delimiter=',', quotechar='|')
-        for row in reader:
-            if len(row)==0:
-                break
-            attList.append(row[2:NUMBER_OF_ATTRIBUTES+1])
-            classList.append(row[1])
-    
-    #convert attributes to floats
-    for i in range(len(attList[0])):
-        str_column_to_float(attList, i)
-    
-    # convert list to two numpy arrays, attributes and classes
-    attributes = np.asarray(attList)
-    classes = np.asarray(classList)
-            
-    return attributes, classes
-
-
-def get_model_dense():
-    model = Sequential()
-    model.add(Dense(output_dim=16, activation='relu', input_dim=30, init='uniform'))   
-    model.add(Dropout(0.1))
-    model.add(Dense(16, activation='relu',init='uniform')) 
-    model.add(Dropout(0.1))
-    model.add(Dense(1, activation='sigmoid',init='uniform'))
-    
-    model.compile(optimizer='adam', 
-                  loss='binary_crossentropy', metrics=['accuracy'])
-    return model
-
-
-def model_skip_connection():
-    
-    # input tensor
-    inputs = Input(shape=(30,))
-    
-    #layers
-    output_1 = Dense(4, activation='relu')(inputs)
-    output_2 = Dense(3, activation='relu')(output_1)
-    z = concatenate([output_1, output_2])
-    predictions = Dense(1, activation='sigmoid')(z)
-
-    
-    #create model
-    model = Model(inputs=inputs, outputs=predictions)
-    model.compile(optimizer='adam', 
-                  loss='binary_crossentropy', metrics=['accuracy'])
-    
-    return model
-    
-
-def skip_connection_layer():
-    inp = Input(shape=(30,), name='i1')
-    inp2 = Lambda(lambda x: x[:,1:2], name='i2')(inp)   # get the second neuron
-    
-    h1_out = Dense(1, activation='relu', name='h1', init='uniform')(inp2)  # only connected to the second neuron
-    h2_out = Dense(1, activation='relu', name='h2', init='uniform')(inp)  # connected to both neurons
-    h_out = concatenate([h1_out, h2_out])
-    
-    d1 = Dense(1, activation='relu', init='uniform')(h_out)
-    d2 = Dense(1, activation='relu', init='uniform')(inp2)
-    d_out = concatenate([d1, d2])
-    
-    out = Dense(1, activation='sigmoid', init='uniform')(d_out)
-    
-    
-    
-    model = Model(inp, out)
-    
-    model.compile(optimizer='adam', 
-                  loss='binary_crossentropy', metrics=['accuracy'])
-    return model
-    
-
 def test_model(model):
  
     #train model
@@ -151,100 +60,10 @@ def test_model(model):
     plot_training_history(history)
     return history
 
-
-
-def small_model():
-    #input tensor
-    inp = Input(shape=(30,))
-    
-    #first layer
-    l1 = Dense(16, activation='relu')(inp)
-    d1 = Dropout(0.2)(l1)
-    
-    #second layer
-    mat = np.eye(16)
-    l2 = CustomConnected(16, connections=mat, activation='relu')(d1)
-
-    d2 = Dropout(0.2)(l2)
-    
-    #output node
-    mat = np.zeros((16,1))
-    out = CustomConnected(1, activation='sigmoid', connections=mat, name="output")(d2)
-    
-    model = Model(inp, out)
-    
-    model.compile(optimizer='adam', 
-                  loss='binary_crossentropy', metrics=['accuracy'])
-    return model
-
-def sparseSkipModel():
-    
-    inp = Input(shape=(30,))
-    
-    # First layer
-    l1 = Dense(4, activation='relu')(inp)
-    
-    #second layer
-    mat = np.zeros((4,4))
-    mat[0,0] = 1
-    mat[3,0] = 1
-    mat[0,1] = 1
-    mat[2,1] = 1
-    mat[1,2] = 1
-    mat[2,2] = 1
-    mat[1,3] = 1
-    mat[3,3] = 1
-    l2 = CustomConnected(4, activation='relu', connections=mat)(l1)
-    
-    #third layer
-    z = concatenate([l2, l1])
-    mat2 = np.zeros((4*2,4))
-    mat2[0,0:] = 1
-    mat2[4,0] = 1
-    mat2[7,3] = 1
-
-    l3 = CustomConnected(4, activation='relu', connections=mat2)(z)
-    
-    #output layer
-    mat3 = np.zeros((4*3, 1))
-    mat3[0:4] = 1
-    mat3[6] = 1
-    z = concatenate([l3, z])
-    out = CustomConnected(1, activation='sigmoid', connections=mat3)(z)
-    
-    model = Model(inp, out)
-    
-    model.compile(optimizer='adam', 
-                  loss='binary_crossentropy', metrics=['accuracy'])
-    return model
-
-
-class CustomConnected(Dense):
-    
-    def __init__(self, units, connections, **kwargs):
-        
-        # connection matrix
-        self.connections = connections
-        
-        super(CustomConnected, self).__init__(units,**kwargs)
-                
-    def call(self, inputs):
-        output = K.dot(inputs, self.kernel * self.connections)
-        if self.use_bias:
-            output = K.bias_add(output, self.bias)
-        if self.activation is not None:
-            output = self.activation(output)
-        return output
-    
-    def build(self, input_shape):
-        super(CustomConnected, self).build(input_shape)
-        weights = self.get_weights()
-        weights[0] = self.get_weights()[0] * self.connections
-        self.set_weights(weights)
-
     
 def ann_to_graph(layers):
     
+    #Generate adjacency matrix
     mat = np.zeros((layers[0].shape[0]+1,layers[0].shape[0]+1))
     i = -1
     for layer in layers:
@@ -260,37 +79,40 @@ def ann_to_graph(layers):
             mat[i-layer.shape[1]+1:i+1, 0:layer.shape[0]] = np.transpose(layer)
             
         i = i - layer.shape[1]
+        
+    # turn into networkx graph
+    graph = nx.from_numpy_matrix(mat)
     
-    return mat
+    #vizualise NN
+    vis = nx.nx_pydot.to_pydot(graph)
+    vis.write_png('example2_graph.png')
+    
+    return graph
+    
         
-        
-
 if __name__ == "__main__":
     
     #load dataset
-    x,y = load_csv()
+    x,y = utils.load_csv(PATH, NUMBER_OF_ATTRIBUTES)
     
     #convert labels to integers
-    y = classes_to_int(y)
+    y = utils.classes_to_int(y)
     #y = to_categorical(y, num_classes=2)
     
     #split to trainign and testing data
     X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2,
                                                         random_state=42)
     #get neural network
-#    model = sparseSkipModel()
+    model = models.sparseSkipModel()
     
-#    s = model.get_weights()
+    s = model.get_weights()
     
-#    model.summary()
+    model.summary()
     
-#    history = test_model(model)
+    history = test_model(model)
     
-#    weights = model.get_weights()
+    weights = model.get_weights()
     
-    a = ann_to_graph([b,v])
-    
-
    
     
     
