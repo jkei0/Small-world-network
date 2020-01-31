@@ -16,10 +16,10 @@ from keras import regularizers
 from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
-#from blocksparse.matmul import BlocksparseMatMul
 import tensorflow as tf
 from keras.utils.vis_utils import plot_model
 import keras.initializers
+import networkx as nx
 
 
 NUMBER_OF_ATTRIBUTES = 32
@@ -99,10 +99,10 @@ def model_skip_connection():
     inputs = Input(shape=(30,))
     
     #layers
-    output_1 = Dense(16, activation='relu', init='uniform')(inputs)
-    output_2 = Dense(16, activation='relu', init='uniform')(output_1)
-    z = add([output_1, output_2])
-    predictions = Dense(1, activation='sigmoid', init='uniform')(z)
+    output_1 = Dense(4, activation='relu')(inputs)
+    output_2 = Dense(3, activation='relu')(output_1)
+    z = concatenate([output_1, output_2])
+    predictions = Dense(1, activation='sigmoid')(z)
 
     
     #create model
@@ -177,6 +177,47 @@ def small_model():
                   loss='binary_crossentropy', metrics=['accuracy'])
     return model
 
+def sparseSkipModel():
+    
+    inp = Input(shape=(30,))
+    
+    # First layer
+    l1 = Dense(4, activation='relu')(inp)
+    
+    #second layer
+    mat = np.zeros((4,4))
+    mat[0,0] = 1
+    mat[3,0] = 1
+    mat[0,1] = 1
+    mat[2,1] = 1
+    mat[1,2] = 1
+    mat[2,2] = 1
+    mat[1,3] = 1
+    mat[3,3] = 1
+    l2 = CustomConnected(4, activation='relu', connections=mat)(l1)
+    
+    #third layer
+    z = concatenate([l2, l1])
+    mat2 = np.zeros((4*2,4))
+    mat2[0,0:] = 1
+    mat2[4,0] = 1
+    mat2[7,3] = 1
+
+    l3 = CustomConnected(4, activation='relu', connections=mat2)(z)
+    
+    #output layer
+    mat3 = np.zeros((4*3, 1))
+    mat3[0:4] = 1
+    mat3[6] = 1
+    z = concatenate([l3, z])
+    out = CustomConnected(1, activation='sigmoid', connections=mat3)(z)
+    
+    model = Model(inp, out)
+    
+    model.compile(optimizer='adam', 
+                  loss='binary_crossentropy', metrics=['accuracy'])
+    return model
+
 
 class CustomConnected(Dense):
     
@@ -202,6 +243,27 @@ class CustomConnected(Dense):
         self.set_weights(weights)
 
     
+def ann_to_graph(layers):
+    
+    mat = np.zeros((layers[0].shape[0]+1,layers[0].shape[0]+1))
+    i = -1
+    for layer in layers:
+        if layer.ndim == 1:
+            layer = layer.reshape((layer.shape[0], 1))
+        
+        if layer.shape[1] == 1:
+            mat[0:layer.shape[0],i:] = layer
+            mat[i, 0:layer.shape[0]] = np.transpose(layer)
+            
+        else:
+            mat[0:layer.shape[0], -layer.shape[1]+i+1:i+1] = layer
+            mat[i-layer.shape[1]+1:i+1, 0:layer.shape[0]] = np.transpose(layer)
+            
+        i = i - layer.shape[1]
+    
+    return mat
+        
+        
 
 if __name__ == "__main__":
     
@@ -216,18 +278,17 @@ if __name__ == "__main__":
     X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2,
                                                         random_state=42)
     #get neural network
-    model = small_model()
+#    model = sparseSkipModel()
     
-    s = model.get_weights()
+#    s = model.get_weights()
     
-    model.summary()
+#    model.summary()
     
-    history = test_model(model)
+#    history = test_model(model)
     
-    weights = model.get_weights()
+#    weights = model.get_weights()
     
-    aps = w[2] - s[2]
-    
+    a = ann_to_graph([b,v])
     
 
    
