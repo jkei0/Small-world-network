@@ -131,3 +131,78 @@ def sparseSkipModel():
     model.compile(optimizer='adam', 
                   loss='binary_crossentropy', metrics=['accuracy'])
     return model
+
+
+def model_orig():
+    
+    inp = Input(shape=(30,))
+    
+    #first layer
+    l1 = Dense(16, activation='relu')(inp)
+    
+    #second layer
+    mat2 = np.ones((16,16))
+    l2 = sp.CustomConnected(16, connections=mat2, activation='relu')(l1)
+    z = concatenate([l1, l2])
+    
+    #third layer
+    mat3 = np.zeros((16*2, 16))
+    mat3[15:,:] = 1
+    l3 = sp.CustomConnected(16,connections=mat3, activation='relu')(z)
+    z = concatenate([z, l3])
+    
+    #output layer
+    mat4 = np.zeros((16*3, 1))
+    mat4[16*2:] = 1
+    out = sp.CustomConnected(1, connections=mat4, activation='sigmoid')(z)
+    
+    model = Model(inp, out)
+    model.compile(optimizer='adam', 
+                  loss='binary_crossentropy', metrics=['accuracy'])
+
+
+    layers = [mat4, mat3, mat2]
+    
+    return model, layers
+
+def model_rewired(layers):
+    inp = Input(shape=(30,))
+    
+    #first layer
+    l1 = Dense(16, activation='relu')(inp)
+    
+    #second
+    l2 = sp.CustomConnected(16, connections=layers[2], activation='relu')(l1)
+    z = concatenate([l1, l2])
+    
+    #third
+    l3 = sp.CustomConnected(16, connections=layers[1], activation='relu')(z)
+    z = concatenate([z,l3])
+    
+    #output
+    out = sp.CustomConnected(1, connections=layers[0], activation='sigmoid')(z)
+    
+    model = Model(inp, out)
+    model.compile(optimizer='adam', 
+                  loss='binary_crossentropy', metrics=['accuracy'])
+    
+    return model
+    
+
+def model_orig_compare():
+    model = Sequential()
+    model.add(Dense(output_dim=16, activation='relu', input_dim=30))   
+    model.add(Dense(16, activation='relu'))
+    model.add(Dense(16, activation='relu')) 
+    model.add(Dense(1, activation='sigmoid'))
+    
+    model.compile(optimizer='adam', 
+                  loss='binary_crossentropy', metrics=['accuracy'])
+    return model
+
+    
+    
+    
+    
+    
+

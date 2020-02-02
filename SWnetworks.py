@@ -17,6 +17,7 @@ from keras.utils.vis_utils import plot_model
 import keras.initializers
 import networkx as nx
 import pydot
+import random
 
 import models
 import utils
@@ -88,7 +89,28 @@ def ann_to_graph(layers):
     vis.write_png('example2_graph.png')
     
     return graph
-    
+
+
+def decision(propability):
+    return random.random() < propability
+
+
+def rewire_to_smallworld(layer, p):
+    rewired = []
+    it = np.nditer(layer, flags = ['multi_index'], op_flags=['readwrite'])
+    for cell in it:
+        if cell == 1 and decision(p):
+            while True:
+                ind_row = random.randint(0, layer.shape[0]-1)
+                ind_col = random.randint(0, layer.shape[1]-1)
+                ind = (ind_row, ind_col)
+                if layer[ind] == 0 and ind not in rewired:
+                    rewired.append(ind)
+                    layer[it.multi_index] = 0
+                    layer[ind] = 1
+                    break
+    return layer
+
         
 if __name__ == "__main__":
     
@@ -103,15 +125,24 @@ if __name__ == "__main__":
     X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2,
                                                         random_state=42)
     #get neural network
-    model = models.sparseSkipModel()
+    model, layers = models.model_orig()
+    graph2 = ann_to_graph(layers)
     
-    s = model.get_weights()
+    # rewire connections
+    layers[1] = rewire_to_smallworld(layers[1], 0.4)
     
-    model.summary()
+    #get graph 
+    graph1 = ann_to_graph(layers)
     
-    history = test_model(model)
+    #get model
+    model1 = models.model_rewired(layers)
     
-    weights = model.get_weights()
+    test_model(model1)
+    test_model(model)
+    
+    
+    
+
     
    
     
