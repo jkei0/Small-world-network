@@ -29,3 +29,4 @@ class CustomConnected(Dense):
         weights = self.get_weights()
         weights[0] = self.get_weights()[0] * self.connections
         self.set_weights(weights)
+        

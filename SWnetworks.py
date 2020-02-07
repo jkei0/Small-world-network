@@ -21,7 +21,8 @@ import random
 
 import models
 import utils
-
+from networkx.exception import NetworkXNoPath
+from itertools import permutations
 
 NUMBER_OF_ATTRIBUTES = 32
 NUMBER_OF_INSTANCES = 150
@@ -49,7 +50,7 @@ def plot_training_history(history):
 def test_model(model):
  
     #train model
-    history = model.fit(X_train, y_train, epochs=200, verbose=0, 
+    history = model.fit(X_train, y_train, epochs=200, verbose=1, 
                         batch_size=100)
     
     #test
@@ -88,29 +89,150 @@ def ann_to_graph(layers):
     vis = nx.nx_pydot.to_pydot(graph)
     vis.write_png('example2_graph.png')
     
-    return graph
+    return graph, mat
 
+
+def graph_to_ann(mat, layers):
+    
+    i = -1
+    for j in range(len(layers)):
+        
+        if layers[j].shape[1] == 1:
+            layers[j] = mat[0:layers[j].shape[0], i:]
+        
+        else:
+            layers[j] = mat[0:layers[j].shape[0], -layers[j].shape[1]+i+1:i+1]
+        
+        i = i - layers[j].shape[1]
+        
+    return layers
+            
+        
 
 def decision(propability):
     return random.random() < propability
 
 
-def rewire_to_smallworld(layer, p):
-    rewired = []
-    it = np.nditer(layer, flags = ['multi_index'], op_flags=['readwrite'])
-    for cell in it:
-        if cell == 1 and decision(p):
-            while True:
-                ind_row = random.randint(0, layer.shape[0]-1)
-                ind_col = random.randint(0, layer.shape[1]-1)
-                ind = (ind_row, ind_col)
-                if layer[ind] == 0 and ind not in rewired:
-                    rewired.append(ind)
-                    layer[it.multi_index] = 0
-                    layer[ind] = 1
-                    break
-    return layer
 
+def rewire_to_smallworld(adjmat, layers, p):
+    
+    mat = np.array(adjmat)
+    rewired = []
+    for row in range(mat.shape[0]):
+        column = row+1
+        while column < mat.shape[0]-2:
+            if mat[row, column] == 1 and decision(p) and (row,column) not in rewired:
+                while True:
+                    new_col = random.randint(0, mat.shape[1]-1)
+                    new_ind = (row, new_col)
+                    if (check_if_neighbour(row, new_col, layers)) and mat[new_ind]==0:
+                        rewired.append(new_ind)
+                        mat[row,column] = 0
+                        mat[column,row] = 0
+                        
+                        mat[row,new_col] = 1
+                        mat[new_col,row] = 1
+                        break
+            column = column+1
+    return mat
+                        
+            
+def check_if_neighbour(neuron1, neuron2, layers):
+    for layer in reversed(layers):
+        size = layer.shape[0]
+        if ((neuron1-size > 0) and (neuron2-size < 0)) or ((neuron1-size < 0) and (neuron2-size > 0)):
+            return True
+    return False
+
+
+def measure_small_worldness(mat):
+
+    graph = nx.from_numpy_matrix(mat)
+    """
+    
+    random_clustering, random_path, lattice_cluster, lattice_path = get_random_graph_coeffs(mat)
+    
+    clustering_coeff = nx.algorithms.cluster.average_clustering(graph)
+    shortest_path = nx.average_shortest_path_length(graph)
+    small_world_coeff = (random_path/shortest_path) - (clustering_coeff/lattice_cluster)
+    """
+    Dlocal = local_efficiency(graph)
+    Dglobal = global_efficiency(graph)
+    
+    return Dglobal, Dlocal
+    
+    
+def get_random_graph_coeffs(mat):
+    
+    graph = nx.from_numpy_matrix(mat)
+
+    rand_graph = nx.algorithms.smallworld.random_reference(graph)
+    lattice_graph = nx.algorithms.smallworld.lattice_reference(graph)
+        
+    avg_path_length = nx.average_shortest_path_length(rand_graph)
+    cluster_coeff = nx.algorithms.cluster.average_clustering(rand_graph)
+        
+    avg_path_length_l = nx.average_shortest_path_length(lattice_graph)
+    cluster_coeff_l = nx.algorithms.cluster.average_clustering(lattice_graph)
+    
+    return cluster_coeff, avg_path_length, cluster_coeff_l, avg_path_length_l
+        
+
+def find_smallnetwork(mat, layers):
+
+    Dglobals = []
+    Dlocals = []
+    ps = []
+    p = 0.0
+    while p<=1.0:
+        mat2 = np.array(mat)
+        mat1 = rewire_to_smallworld(mat2,layers,p)
+        graph = nx.from_numpy_matrix(mat1, create_using=nx.MultiDiGraph())
+        #graph = nx.from_numpy_matrix(mat1)
+        remove_wrong_edges(graph)
+        global_eff = global_efficiency(graph)
+        local_eff = local_efficiency(graph)
+        Dglobals.append(global_eff)
+        Dlocals.append(local_eff)
+        ps.append(p)
+        p = p+0.05
+            
+    return Dglobals, Dlocals, ps
+        
+
+def remove_wrong_edges(graph):
+    remove_edges = []
+    for it in graph.edges():
+        if it[0] >= it[1]:
+            remove_edges.append(it)
+    
+    graph.remove_edges_from(remove_edges)
+            
+
+
+def efficiency(G,u,v):
+    try:
+        eff = 1 / nx.shortest_path_length(G, u, v)
+    
+    except NetworkXNoPath:
+        eff = 0
+    return eff  
+    
+
+def global_efficiency(G):
+    n = len(G)
+    denom = n * (n - 1)
+    if denom != 0:
+        
+        g_eff = sum(efficiency(G, u, v) for u, v in permutations(G, 2)) / denom
+    else:
+        g_eff = 0
+
+    return g_eff
+
+def local_efficiency(G):
+
+    return sum(global_efficiency(nx.ego_graph(G, v)) for v in G) / len(G)
         
 if __name__ == "__main__":
     
@@ -126,24 +248,27 @@ if __name__ == "__main__":
                                                         random_state=42)
     #get neural network
     model, layers = models.model_orig()
-    graph2 = ann_to_graph(layers)
+    graph, mat = ann_to_graph(layers)
+    
+    #random_clustering, random_path,  cluster_coeff_l, avg_path_length_l = get_random_graph_coeffs(mat)
     
     # rewire connections
-    layers[1] = rewire_to_smallworld(layers[1], 0.4)
+    Dglobals, Dlocals, p = find_smallnetwork(mat, layers)
     
-    #get graph 
-    graph1 = ann_to_graph(layers)
-    
-    #get model
-    model1 = models.model_rewired(layers)
-    
-    test_model(model1)
-    test_model(model)
-    
-    
-    
+    for i in range(len(Dglobals)):
+        Dglobals[i] = 1/Dglobals[i]
+        Dlocals[i] = 1/Dlocals[i]
+        
+        
+    plt.scatter(p, Dglobals)
+    plt.scatter(p, Dlocals)
 
     
-   
+    #layers = graph_to_ann(mat1, layers)
+    
+    #get model
+    #model1 = models.model_rewired(layers)
+    #test_model(model1)
+    
     
     

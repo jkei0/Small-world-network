@@ -147,21 +147,45 @@ def model_orig():
     
     #third layer
     mat3 = np.zeros((16*2, 16))
-    mat3[15:,:] = 1
+    mat3[16:,:] = 1
     l3 = sp.CustomConnected(16,connections=mat3, activation='relu')(z)
-    z = concatenate([z, l3])
+    z = concatenate([l1, l2, l3])
+    
+    #forth layer
+    mat4 = np.zeros((16*3, 16))
+    mat4[16*2:,:] = 1
+    l4 = sp.CustomConnected(16,connections=mat4, activation='relu')(z)
+    z = concatenate([l1, l2, l3, l4])
+    
+    #fifth layer
+    mat5 = np.zeros((16*4, 16))
+    mat5[16*3:,:] = 1
+    l5 = sp.CustomConnected(16,connections=mat5, activation='relu')(z)
+    z = concatenate([l1, l2, l3, l4, l5])
+    
+    #sixth layer
+    mat6 = np.zeros((16*5, 16))
+    mat6[16*4:,:] = 1
+    l6 = sp.CustomConnected(16,connections=mat6, activation='relu')(z)
+    z = concatenate([z, l6])
+    
+    #seventh layer
+    mat7 = np.zeros((16*6, 16))
+    mat7[16*5:,:] = 1
+    l7 = sp.CustomConnected(16,connections=mat7, activation='relu')(z)
+    z = concatenate([z, l7])
     
     #output layer
-    mat4 = np.zeros((16*3, 1))
-    mat4[16*2:] = 1
-    out = sp.CustomConnected(1, connections=mat4, activation='sigmoid')(z)
+    mat8 = np.zeros((16*7, 1))
+    mat8[16*6:] = 1
+    out = sp.CustomConnected(1, connections=mat8, activation='sigmoid')(z)
     
     model = Model(inp, out)
     model.compile(optimizer='adam', 
                   loss='binary_crossentropy', metrics=['accuracy'])
 
 
-    layers = [mat4, mat3, mat2]
+    layers = [mat8, mat7, mat6, mat5, mat4, mat3, mat2]
     
     return model, layers
 
@@ -172,12 +196,28 @@ def model_rewired(layers):
     l1 = Dense(16, activation='relu')(inp)
     
     #second
-    l2 = sp.CustomConnected(16, connections=layers[2], activation='relu')(l1)
+    l2 = sp.CustomConnected(16, connections=layers[6], activation='relu')(l1)
     z = concatenate([l1, l2])
     
     #third
-    l3 = sp.CustomConnected(16, connections=layers[1], activation='relu')(z)
+    l3 = sp.CustomConnected(16, connections=layers[5], activation='relu')(z)
     z = concatenate([z,l3])
+    
+    #forth 
+    l4 = sp.CustomConnected(16,connections=layers[4], activation='relu')(z)
+    z = concatenate([z, l4])
+    
+    #fifth
+    l5 = sp.CustomConnected(16, connections=layers[3], activation='relu')(z)
+    z = concatenate([z, l5])
+    
+    #sixth
+    l6 = sp.CustomConnected(16, connections=layers[2], activation='relu')(z)
+    z = concatenate([z, l6])
+    
+    #seventh 
+    l7 = sp.CustomConnected(16, connections=layers[1], activation='relu')(z)
+    z = concatenate([z, l7])    
     
     #output
     out = sp.CustomConnected(1, connections=layers[0], activation='sigmoid')(z)
