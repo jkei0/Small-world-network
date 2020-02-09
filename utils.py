@@ -10,6 +10,11 @@ import numpy as np
 
 
 def classes_to_int(classes):
+    """
+    Maps different class names to integers
+    ::param classes:: list of classes
+    ::output y:: classes mapped to integers
+    """
     le = preprocessing.LabelEncoder()
     le.fit(classes)
     y = le.transform(classes)
@@ -22,6 +27,14 @@ def str_column_to_float(dataset, column):
         
 
 def load_csv(path, nroAttributes):
+    """
+    loads csv files from UCI Machine learning repository
+    (https://archive.ics.uci.edu/ml/index.php) to numpy matrices
+    ::param path:: path of csv file
+    ::param nroAttributes:: number of attributes in dataset
+    ::output attributes:: attributes in numpy array
+    ::output classes:: classes in numpy array
+    """
     attList = []
     classList = []
    

@@ -31,6 +31,12 @@ PATH = 'brestcancer/wdbc.data'
 
 
 def plot_training_history(history):
+    """
+    Function plots training loss and accuracy for keras model
+    ::param history:: keras history object 
+
+    """
+    
     # summarize history for accuracy
     plt.plot(history.history['acc'])
     plt.title('model accuracy')
@@ -48,6 +54,11 @@ def plot_training_history(history):
     
 
 def test_model(model):
+    """
+    Trains keras model
+    ::param model:: keras model
+    ::output history:: keras history object
+    """
  
     #train model
     history = model.fit(X_train, y_train, epochs=200, verbose=1, 
@@ -64,7 +75,13 @@ def test_model(model):
 
     
 def ann_to_graph(layers):
-    
+    """
+    Generates graph from ANN connection matrices
+    ::param layers:: list of numpy matrices that maps connections between ANN neurons
+    ::output graph:: networkx graph object
+    ::output mat:: graph adjacency matrix
+    """
+       
     #Generate adjacency matrix
     mat = np.zeros((layers[0].shape[0]+1,layers[0].shape[0]+1))
     i = -1
@@ -93,6 +110,12 @@ def ann_to_graph(layers):
 
 
 def graph_to_ann(mat, layers):
+    """
+    Generates ANN connection matrices from graph adjacency matrix
+    ::param mat:: adjacency matrix
+    ::param layers:: list of correct size numpy matrices
+    ::output layers:: list of numpy matrices that maps connections between ANN neurons 
+    """
     
     i = -1
     for j in range(len(layers)):
@@ -113,14 +136,23 @@ def decision(propability):
     return random.random() < propability
 
 
-
 def rewire_to_smallworld(adjmat, layers, p):
+    """
+    Function that rewires connections in graph according to Wattz-Strogatz model,
+    creates small-world networks
+    ::param adjmat:: graph adjacency matrix
+    ::param layers:: numpy matrices that maps connections between neurons in ANN
+    ::param p:: probability of rewiring
+    ::output mat:: new adjacency matrix
+    """
     
     mat = np.array(adjmat)
-    rewired = []
+    rewired = [] #list of already rewired connections
+    
     for row in range(mat.shape[0]):
         column = row+1
         while column < mat.shape[0]-2:
+            
             if mat[row, column] == 1 and decision(p) and (row,column) not in rewired:
                 while True:
                     new_col = random.randint(0, mat.shape[1]-1)
@@ -138,6 +170,13 @@ def rewire_to_smallworld(adjmat, layers, p):
                         
             
 def check_if_neighbour(neuron1, neuron2, layers):
+    """
+    Checks if two neurons are neighbours in ANN
+    ::param neuron1:: coordinates of neuron 1 in adjacency matrix
+    ::param neuron2:: coordinates of neuron 2 in adjacency matrix
+    ::param layers:: numpy matrices that maps connections between neurons in ANN
+    ::output:: True if neurons are neighbours otherwise false
+    """
     for layer in reversed(layers):
         size = layer.shape[0]
         if ((neuron1-size > 0) and (neuron2-size < 0)) or ((neuron1-size < 0) and (neuron2-size > 0)):
@@ -146,6 +185,12 @@ def check_if_neighbour(neuron1, neuron2, layers):
 
 
 def measure_small_worldness(mat):
+    """
+    Measures small-wordliness of graph
+    ::param mat:: graph adjacency matrix
+    ::output Dglobal:: global efficiensy of graph
+    ::output Dlocal:: local efficiensy of graph
+    """
 
     graph = nx.from_numpy_matrix(mat)
     """
@@ -179,6 +224,16 @@ def get_random_graph_coeffs(mat):
         
 
 def find_smallnetwork(mat, layers):
+    """
+    Function rewires given graph with multiple probabilites p, and stores 
+    Dglobal and Dlocal values, tries to find values p which gives best 
+    representation of small-worldiness of graph
+    ::param mat:: graph adjacency matrix
+    ::param layers:: numpy matrices that maps connections between neurons in ANN
+    ::output Dglobals:: list of Dglobal values
+    ::output Dlocal:: list of Dlocal values
+    ::output ps:: list of probabilities
+    """
 
     Dglobals = []
     Dlocals = []
@@ -201,6 +256,10 @@ def find_smallnetwork(mat, layers):
         
 
 def remove_wrong_edges(graph):
+    """
+    Removes wrong edges from directed graph
+    ::param graph:: networkx graph object
+    """
     remove_edges = []
     for it in graph.edges():
         if it[0] >= it[1]:
@@ -220,6 +279,9 @@ def efficiency(G,u,v):
     
 
 def global_efficiency(G):
+    """
+    Calculates global efficiency (Dglobal) from graph
+    """
     n = len(G)
     denom = n * (n - 1)
     if denom != 0:
@@ -231,6 +293,9 @@ def global_efficiency(G):
     return g_eff
 
 def local_efficiency(G):
+    """
+    Calculates local efficiensy (Dlocal) from graph
+    """
 
     return sum(global_efficiency(nx.ego_graph(G, v)) for v in G) / len(G)
         

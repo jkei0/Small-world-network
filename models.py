@@ -3,6 +3,8 @@
 Created on Sat Feb  1 01:24:56 2020
 
 @author: jonik
+
+Different keras models used for testing
 """
 
 from keras.models import Sequential, Model
