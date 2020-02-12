@@ -8,136 +8,86 @@ Different keras models used for testing
 """
 
 from keras.models import Sequential, Model
-from keras.layers import Dense, Dropout, Lambda, Input, concatenate
+from keras.layers import Dense, Dropout, Input, concatenate
+from keras import regularizers
 import numpy as np
 import sparseconnection as sp
 
 
-def get_model_dense():
+def model_weight_reg():
     model = Sequential()
-    model.add(Dense(output_dim=16, activation='relu', input_dim=30, init='uniform'))   
-    model.add(Dropout(0.1))
-    model.add(Dense(16, activation='relu',init='uniform')) 
-    model.add(Dropout(0.1))
-    model.add(Dense(1, activation='sigmoid',init='uniform'))
+    model.add(Dense(48, activation='relu'))
+    
+    model.add(Dense(64, activation='relu', kernel_regularizer=regularizers.l2(0.01), 
+                    activity_regularizer=regularizers.l1(0.001)))
+    
+    model.add(Dense(64, activation='relu', kernel_regularizer=regularizers.l2(0.01), 
+                    activity_regularizer=regularizers.l1(0.001)))
+
+    model.add(Dense(64, activation='relu', kernel_regularizer=regularizers.l2(0.01), 
+                    activity_regularizer=regularizers.l1(0.001)))
+    
+    model.add(Dense(64, activation='relu', kernel_regularizer=regularizers.l2(0.01), 
+                    activity_regularizer=regularizers.l1(0.001)))
+    
+    model.add(Dense(64, activation='relu', kernel_regularizer=regularizers.l2(0.01), 
+                    activity_regularizer=regularizers.l1(0.001)))
+    
+    model.add(Dense(64, activation='relu', kernel_regularizer=regularizers.l2(0.01), 
+                    activity_regularizer=regularizers.l1(0.001)))
+    
+    model.add(Dense(64, activation='relu', kernel_regularizer=regularizers.l2(0.01), 
+                    activity_regularizer=regularizers.l1(0.001)))
+    
+    model.add(Dense(11, activation='softmax'))
     
     model.compile(optimizer='adam', 
-                  loss='binary_crossentropy', metrics=['accuracy'])
-    return model
-
-
-def model_skip_connection():
-    
-    # input tensor
-    inputs = Input(shape=(30,))
-    
-    #layers
-    output_1 = Dense(4, activation='relu')(inputs)
-    output_2 = Dense(3, activation='relu')(output_1)
-    z = concatenate([output_1, output_2])
-    predictions = Dense(1, activation='sigmoid')(z)
-
-    
-    #create model
-    model = Model(inputs=inputs, outputs=predictions)
-    model.compile(optimizer='adam', 
-                  loss='binary_crossentropy', metrics=['accuracy'])
+            loss='sparse_categorical_crossentropy', metrics=['accuracy'])
     
     return model
+
+        
     
 
-def skip_connection_layer():
-    inp = Input(shape=(30,), name='i1')
-    inp2 = Lambda(lambda x: x[:,1:2], name='i2')(inp)   # get the second neuron
+def model_dropout():
+    model = Sequential()
     
-    h1_out = Dense(1, activation='relu', name='h1', init='uniform')(inp2)  # only connected to the second neuron
-    h2_out = Dense(1, activation='relu', name='h2', init='uniform')(inp)  # connected to both neurons
-    h_out = concatenate([h1_out, h2_out])
+    model.add(Dense(48, activation='relu'))
+    model.add(Dropout(0.5))
     
-    d1 = Dense(1, activation='relu', init='uniform')(h_out)
-    d2 = Dense(1, activation='relu', init='uniform')(inp2)
-    d_out = concatenate([d1, d2])
+    model.add(Dense(64, activation='relu'))
+    model.add(Dropout(0.5))
     
-    out = Dense(1, activation='sigmoid', init='uniform')(d_out)
+    model.add(Dense(64, activation='relu'))
+    model.add(Dropout(0.5))
     
+    model.add(Dense(64, activation='relu'))
+    model.add(Dropout(0.5))
     
+    model.add(Dense(64, activation='relu'))
+    model.add(Dropout(0.5))
     
-    model = Model(inp, out)
+    model.add(Dense(64, activation='relu'))
+    model.add(Dropout(0.5))
+    
+    model.add(Dense(64, activation='relu'))
+    model.add(Dropout(0.5))
+    
+    model.add(Dense(64, activation='relu'))
+    model.add(Dropout(0.5))
+    
+    model.add(Dense(11, activation='softmax'))
     
     model.compile(optimizer='adam', 
-                  loss='binary_crossentropy', metrics=['accuracy'])
+            loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    
     return model
     
-
-def small_model():
-    #input tensor
-    inp = Input(shape=(30,))
-    
-    #first layer
-    l1 = Dense(16, activation='relu')(inp)
-    d1 = Dropout(0.2)(l1)
-    
-    #second layer
-    mat = np.eye(16)
-    l2 = sp.CustomConnected(16, connections=mat, activation='relu')(d1)
-
-    d2 = Dropout(0.2)(l2)
-    
-    #output node
-    mat = np.zeros((16,1))
-    out = sp.CustomConnected(1, activation='sigmoid', connections=mat, name="output")(d2)
-    
-    model = Model(inp, out)
-    
-    model.compile(optimizer='adam', 
-                  loss='binary_crossentropy', metrics=['accuracy'])
-    return model
-
-def sparseSkipModel():
-    
-    inp = Input(shape=(30,))
-    
-    # First layer
-    l1 = Dense(4, activation='relu')(inp)
-    
-    #second layer
-    mat = np.zeros((4,4))
-    mat[0,0] = 1
-    mat[3,0] = 1
-    mat[0,1] = 1
-    mat[2,1] = 1
-    mat[1,2] = 1
-    mat[2,2] = 1
-    mat[1,3] = 1
-    mat[3,3] = 1
-    l2 = sp.CustomConnected(4, activation='relu', connections=mat)(l1)
-    
-    #third layer
-    z = concatenate([l2, l1])
-    mat2 = np.zeros((4*2,4))
-    mat2[0,0:] = 1
-    mat2[4,0] = 1
-    mat2[7,3] = 1
-
-    l3 = sp.CustomConnected(4, activation='relu', connections=mat2)(z)
-    
-    #output layer
-    mat3 = np.zeros((4*3, 1))
-    mat3[0:4] = 1
-    mat3[6] = 1
-    z = concatenate([l3, z])
-    out = sp.CustomConnected(1, activation='sigmoid', connections=mat3)(z)
-    
-    model = Model(inp, out)
-    
-    model.compile(optimizer='adam', 
-                  loss='binary_crossentropy', metrics=['accuracy'])
-    return model
-
 
 def model_orig():
     
-    inp = Input(shape=(30,))
+    
+    inp = Input(shape=(48,))
     
     #first layer
     l1 = Dense(16, activation='relu')(inp)
@@ -177,70 +127,79 @@ def model_orig():
     l7 = sp.CustomConnected(16,connections=mat7, activation='relu')(z)
     z = concatenate([z, l7])
     
+    #eight layer
+    mat8 = np.zeros((16*7, 16))
+    mat8[16*6:,:] = 1
+    l8 = sp.CustomConnected(16,connections=mat8, activation='relu')(z)
+    z = concatenate([z, l8])
+    
+    #nineth layer
+    mat9 = np.zeros((16*8, 16))
+    mat9[16*7:,:] = 1
+    l9 = sp.CustomConnected(16,connections=mat9, activation='relu')(z)
+    z = concatenate([z, l9])
+    
     #output layer
-    mat8 = np.zeros((16*7, 1))
-    mat8[16*6:] = 1
-    out = sp.CustomConnected(1, connections=mat8, activation='sigmoid')(z)
+    mat10 = np.zeros((16*9, 11))
+    mat10[16*8:, :] = 1
+    out = sp.CustomConnected(11, connections=mat10, activation='softmax')(z)
     
     model = Model(inp, out)
     model.compile(optimizer='adam', 
-                  loss='binary_crossentropy', metrics=['accuracy'])
+                  loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
 
-    layers = [mat8, mat7, mat6, mat5, mat4, mat3, mat2]
+    layers = [mat10, mat9, mat8, mat7, mat6, mat5, mat4, mat3, mat2]
     
     return model, layers
 
 def model_rewired(layers):
-    inp = Input(shape=(30,))
+    inp = Input(shape=(48,))
     
     #first layer
     l1 = Dense(16, activation='relu')(inp)
     
     #second
-    l2 = sp.CustomConnected(16, connections=layers[6], activation='relu')(l1)
+    l2 = sp.CustomConnected(16, connections=layers[8], activation='relu')(l1)
     z = concatenate([l1, l2])
     
     #third
-    l3 = sp.CustomConnected(16, connections=layers[5], activation='relu')(z)
+    l3 = sp.CustomConnected(16, connections=layers[7], activation='relu')(z)
     z = concatenate([z,l3])
     
     #forth 
-    l4 = sp.CustomConnected(16,connections=layers[4], activation='relu')(z)
+    l4 = sp.CustomConnected(16,connections=layers[6], activation='relu')(z)
     z = concatenate([z, l4])
     
     #fifth
-    l5 = sp.CustomConnected(16, connections=layers[3], activation='relu')(z)
+    l5 = sp.CustomConnected(16, connections=layers[5], activation='relu')(z)
     z = concatenate([z, l5])
     
     #sixth
-    l6 = sp.CustomConnected(16, connections=layers[2], activation='relu')(z)
+    l6 = sp.CustomConnected(16, connections=layers[4], activation='relu')(z)
     z = concatenate([z, l6])
     
     #seventh 
-    l7 = sp.CustomConnected(16, connections=layers[1], activation='relu')(z)
-    z = concatenate([z, l7])    
+    l7 = sp.CustomConnected(16, connections=layers[3], activation='relu')(z)
+    z = concatenate([z, l7])
+
+    #eighth 
+    l8 = sp.CustomConnected(16, connections=layers[2], activation='relu')(z)
+    z = concatenate([z, l8])
+    
+    #ninth 
+    l9 = sp.CustomConnected(16, connections=layers[1], activation='relu')(z)
+    z = concatenate([z, l9]) 
     
     #output
-    out = sp.CustomConnected(1, connections=layers[0], activation='sigmoid')(z)
+    out = sp.CustomConnected(11, connections=layers[0], activation='softmax')(z)
     
     model = Model(inp, out)
     model.compile(optimizer='adam', 
-                  loss='binary_crossentropy', metrics=['accuracy'])
+                  loss='sparse_categorical_crossentropy', metrics=['accuracy'])
     
     return model
-    
 
-def model_orig_compare():
-    model = Sequential()
-    model.add(Dense(output_dim=16, activation='relu', input_dim=30))   
-    model.add(Dense(16, activation='relu'))
-    model.add(Dense(16, activation='relu')) 
-    model.add(Dense(1, activation='sigmoid'))
-    
-    model.compile(optimizer='adam', 
-                  loss='binary_crossentropy', metrics=['accuracy'])
-    return model
 
     
     

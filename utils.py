@@ -28,8 +28,8 @@ def classes_to_int(classes):
 def str_column_to_float(dataset, column):
     for row in dataset:
         row[column]=float(row[column].strip())
+                
         
-
 def load_csv(path, nroAttributes):
     """
     loads csv files from UCI Machine learning repository
@@ -43,20 +43,22 @@ def load_csv(path, nroAttributes):
     classList = []
    
     with open(path, 'r') as csvfile:
-        reader = csv.reader(csvfile, delimiter=',', quotechar='|')
+        reader = csv.reader(csvfile, delimiter=' ', quotechar='|')
         for row in reader:
             if len(row)==0:
                 break
-            attList.append(row[2:nroAttributes+1])
-            classList.append(row[1])
+            attList.append(row[0:nroAttributes-1])
+            classList.append(row[-1])
     
     #convert attributes to floats
     for i in range(len(attList[0])):
         str_column_to_float(attList, i)
+
     
     # convert list to two numpy arrays, attributes and classes
     attributes = np.asarray(attList)
     classes = np.asarray(classList)
+    classes = np.array(classes)
             
     return attributes, classes
 
@@ -154,7 +156,7 @@ def rewire_to_smallworld(adjmat, layers, p):
     
     for row in range(mat.shape[0]):
         column = row+1
-        while column < mat.shape[0]-2:
+        while column < mat.shape[0]:
             
             if mat[row, column] == 1 and decision(p) and (row,column) not in rewired:
                 while True:

@@ -24,9 +24,9 @@ import utils
 from networkx.exception import NetworkXNoPath
 from itertools import permutations
 
-NUMBER_OF_ATTRIBUTES = 32
-NUMBER_OF_INSTANCES = 150
-PATH = 'brestcancer/wdbc.data'
+NUMBER_OF_ATTRIBUTES = 49
+NUMBER_OF_INSTANCES = 58509
+PATH = 'DriveDiagnosis/Sensorless_drive_diagnosis.txt'
 
 
 
@@ -61,8 +61,8 @@ def test_model(model):
     """
  
     #train model
-    history = model.fit(X_train, y_train, epochs=200, verbose=1, 
-                        batch_size=100)
+    history = model.fit(X_train, y_train, epochs=150, verbose=1, 
+                        batch_size=124)
     
     #test
     results = model.evaluate(X_test, y_test)
@@ -83,7 +83,7 @@ def ann_to_graph(layers):
     """
        
     #Generate adjacency matrix
-    mat = np.zeros((layers[0].shape[0]+1,layers[0].shape[0]+1))
+    mat = np.zeros((layers[0].shape[0]+11,layers[0].shape[0]+11))
     i = -1
     for layer in layers:
         if layer.ndim == 1:
@@ -93,11 +93,17 @@ def ann_to_graph(layers):
             mat[0:layer.shape[0],i:] = layer
             mat[i, 0:layer.shape[0]] = np.transpose(layer)
             
+        elif i == -1:
+            mat[0:layer.shape[0], -layer.shape[1]:] = layer
+            mat[-layer.shape[1]:, 0:layer.shape[0]] = np.transpose(layer)
+            
         else:
             mat[0:layer.shape[0], -layer.shape[1]+i+1:i+1] = layer
             mat[i-layer.shape[1]+1:i+1, 0:layer.shape[0]] = np.transpose(layer)
             
         i = i - layer.shape[1]
+        
+    #mat[0:16, 16:32] = 1
         
     # turn into networkx graph
     graph = nx.from_numpy_matrix(mat)
@@ -116,19 +122,23 @@ def graph_to_ann(mat, layers):
     ::param layers:: list of correct size numpy matrices
     ::output layers:: list of numpy matrices that maps connections between ANN neurons 
     """
-    
+    new_layers = np.array(layers)
     i = -1
-    for j in range(len(layers)):
+    for j in range(len(new_layers)):
         
-        if layers[j].shape[1] == 1:
-            layers[j] = mat[0:layers[j].shape[0], i:]
+        if new_layers[j].shape[1] == 1:
+            new_layers[j] = mat[0:new_layers[j].shape[0], i:]
+            
+        elif i == -1:
+            new_layers[j] = mat[0:layers[j].shape[0], -new_layers[j].shape[1]:]
         
         else:
-            layers[j] = mat[0:layers[j].shape[0], -layers[j].shape[1]+i+1:i+1]
+            new_layers[j] = mat[0:new_layers[j].shape[0], -new_layers[j].shape[1]+i+1:i+1]
         
-        i = i - layers[j].shape[1]
+        i = i - new_layers[j].shape[1]
+    new_layers.shape = (9,1)
         
-    return layers
+    return new_layers
 
 
 def measure_small_worldness(mat):
@@ -202,27 +212,30 @@ if __name__ == "__main__":
                                                         random_state=42)
     #get neural network
     model, layers = models.model_orig()
+    #model = models.model_dropout()
+    #test_model(model)
+    
+    
     graph, mat = ann_to_graph(layers)
     
-    #random_clustering, random_path,  cluster_coeff_l, avg_path_length_l = get_random_graph_coeffs(mat)
     
     # rewire connections
-    Dglobals, Dlocals, p = find_smallnetwork(mat, layers)
+#    Dglobals, Dlocals, p = find_smallnetwork(mat, layers)
+#    
+#    for i in range(len(Dglobals)):
+#        Dglobals[i] = 1/Dglobals[i]
+#        Dlocals[i] = 1/Dlocals[i]
+#        
+#        
+#    plt.scatter(p, Dglobals)
+#    plt.scatter(p, Dlocals)
     
-    for i in range(len(Dglobals)):
-        Dglobals[i] = 1/Dglobals[i]
-        Dlocals[i] = 1/Dlocals[i]
-        
-        
-    plt.scatter(p, Dglobals)
-    plt.scatter(p, Dlocals)
+    rewired_mat = utils.rewire_to_smallworld(mat, layers, 0.5)
+    new_layers = graph_to_ann(rewired_mat, layers)
+    new_model = models.model_rewired(new_layers)
+    #test_model(new_model)
 
     
-    #layers = graph_to_ann(mat1, layers)
-    
-    #get model
-    #model1 = models.model_rewired(layers)
-    #test_model(model1)
     
     
     
