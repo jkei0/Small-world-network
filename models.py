@@ -16,28 +16,28 @@ import sparseconnection as sp
 
 def model_weight_reg():
     model = Sequential()
-    model.add(Dense(48, activation='relu'))
+    model.add(Dense(561, activation='relu'))
     
     model.add(Dense(64, activation='relu', kernel_regularizer=regularizers.l2(0.01), 
-                    activity_regularizer=regularizers.l1(0.001)))
+                    activity_regularizer=regularizers.l1(0.01)))
     
     model.add(Dense(64, activation='relu', kernel_regularizer=regularizers.l2(0.01), 
-                    activity_regularizer=regularizers.l1(0.001)))
+                    activity_regularizer=regularizers.l1(0.01)))
 
     model.add(Dense(64, activation='relu', kernel_regularizer=regularizers.l2(0.01), 
-                    activity_regularizer=regularizers.l1(0.001)))
+                    activity_regularizer=regularizers.l1(0.01)))
     
     model.add(Dense(64, activation='relu', kernel_regularizer=regularizers.l2(0.01), 
-                    activity_regularizer=regularizers.l1(0.001)))
+                    activity_regularizer=regularizers.l1(0.01)))
     
     model.add(Dense(64, activation='relu', kernel_regularizer=regularizers.l2(0.01), 
-                    activity_regularizer=regularizers.l1(0.001)))
+                    activity_regularizer=regularizers.l1(0.01)))
     
     model.add(Dense(64, activation='relu', kernel_regularizer=regularizers.l2(0.01), 
-                    activity_regularizer=regularizers.l1(0.001)))
+                    activity_regularizer=regularizers.l1(0.01)))
     
     model.add(Dense(64, activation='relu', kernel_regularizer=regularizers.l2(0.01), 
-                    activity_regularizer=regularizers.l1(0.001)))
+                    activity_regularizer=regularizers.l1(0.01)))
     
     model.add(Dense(11, activation='softmax'))
     
@@ -51,30 +51,18 @@ def model_weight_reg():
 
 def model_dropout():
     model = Sequential()
+    model.add(Dense(561, input_shape=(48,), activation='relu'))
+    model.add(Dropout(0.2))
     
-    model.add(Dense(48, activation='relu'))
-    model.add(Dropout(0.5))
+    model.add(Dense(16, activation='relu'))
+    model.add(Dropout(0.2))
     
-    model.add(Dense(64, activation='relu'))
-    model.add(Dropout(0.5))
+    model.add(Dense(16, activation='relu'))
+    model.add(Dropout(0.2))
     
-    model.add(Dense(64, activation='relu'))
-    model.add(Dropout(0.5))
-    
-    model.add(Dense(64, activation='relu'))
-    model.add(Dropout(0.5))
-    
-    model.add(Dense(64, activation='relu'))
-    model.add(Dropout(0.5))
-    
-    model.add(Dense(64, activation='relu'))
-    model.add(Dropout(0.5))
-    
-    model.add(Dense(64, activation='relu'))
-    model.add(Dropout(0.5))
-    
-    model.add(Dense(64, activation='relu'))
-    model.add(Dropout(0.5))
+    model.add(Dense(16, activation='relu'))
+    model.add(Dropout(0.2))
+
     
     model.add(Dense(11, activation='softmax'))
     

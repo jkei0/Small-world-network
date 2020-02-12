@@ -26,7 +26,12 @@ from itertools import permutations
 
 NUMBER_OF_ATTRIBUTES = 49
 NUMBER_OF_INSTANCES = 58509
+
 PATH = 'DriveDiagnosis/Sensorless_drive_diagnosis.txt'
+PATH_TRAIN_SET = 'UCI HAR Dataset/train/X_train.txt'
+PATH_TRAIN_LABELS = 'UCI HAR Dataset/train/y_train.txt'
+PATH_TEST_SET = 'UCI HAR Dataset/test/X_test.txt'
+PATH_TEST_LABELS = 'UCI HAR Dataset/test/y_test.txt'
 
 
 
@@ -122,23 +127,22 @@ def graph_to_ann(mat, layers):
     ::param layers:: list of correct size numpy matrices
     ::output layers:: list of numpy matrices that maps connections between ANN neurons 
     """
-    new_layers = np.array(layers)
+
     i = -1
-    for j in range(len(new_layers)):
+    for j in range(len(layers)):
         
-        if new_layers[j].shape[1] == 1:
-            new_layers[j] = mat[0:new_layers[j].shape[0], i:]
+        if layers[j].shape[1] == 1:
+            layers[j] = mat[0:layers[j].shape[0], i:]
             
         elif i == -1:
-            new_layers[j] = mat[0:layers[j].shape[0], -new_layers[j].shape[1]:]
+            layers[j] = mat[0:layers[j].shape[0], -layers[j].shape[1]:]
         
         else:
-            new_layers[j] = mat[0:new_layers[j].shape[0], -new_layers[j].shape[1]+i+1:i+1]
+            layers[j] = mat[0:layers[j].shape[0], -layers[j].shape[1]+i+1:i+1]
         
-        i = i - new_layers[j].shape[1]
-    new_layers.shape = (9,1)
+        i = i - layers[j].shape[1]
         
-    return new_layers
+    return layers
 
 
 def measure_small_worldness(mat):
@@ -193,7 +197,7 @@ def find_smallnetwork(mat, layers):
         Dglobals.append(global_eff)
         Dlocals.append(local_eff)
         ps.append(p)
-        p = p+0.05
+        p = p+0.02
             
     return Dglobals, Dlocals, ps
             
@@ -201,7 +205,7 @@ def find_smallnetwork(mat, layers):
 if __name__ == "__main__":
     
     #load dataset
-    x,y = utils.load_csv(PATH, NUMBER_OF_ATTRIBUTES)
+    x,y =utils.load_csv(PATH, NUMBER_OF_ATTRIBUTES)
     
     #convert labels to integers
     y = utils.classes_to_int(y)
@@ -213,7 +217,7 @@ if __name__ == "__main__":
     #get neural network
     model, layers = models.model_orig()
     #model = models.model_dropout()
-    #test_model(model)
+    test_model(model)
     
     
     graph, mat = ann_to_graph(layers)
@@ -230,10 +234,10 @@ if __name__ == "__main__":
 #    plt.scatter(p, Dglobals)
 #    plt.scatter(p, Dlocals)
     
-    rewired_mat = utils.rewire_to_smallworld(mat, layers, 0.5)
+    rewired_mat = utils.rewire_to_smallworld(mat, layers, 0.6)
     new_layers = graph_to_ann(rewired_mat, layers)
     new_model = models.model_rewired(new_layers)
-    #test_model(new_model)
+    test_model(new_model)
 
     
     

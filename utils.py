@@ -47,9 +47,10 @@ def load_csv(path, nroAttributes):
         for row in reader:
             if len(row)==0:
                 break
+            result = [x for x in row if x != ''] 
             attList.append(row[0:nroAttributes-1])
             classList.append(row[-1])
-    
+
     #convert attributes to floats
     for i in range(len(attList[0])):
         str_column_to_float(attList, i)
@@ -57,10 +58,10 @@ def load_csv(path, nroAttributes):
     
     # convert list to two numpy arrays, attributes and classes
     attributes = np.asarray(attList)
-    classes = np.asarray(classList)
-    classes = np.array(classes)
+    #classes = np.asarray(classList)
+    #classes = np.array(classes)
             
-    return attributes, classes
+    return attributes, classList
 
 def efficiency(G,u,v):
     try:
