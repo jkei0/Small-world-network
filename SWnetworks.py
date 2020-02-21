@@ -28,10 +28,6 @@ NUMBER_OF_ATTRIBUTES = 49
 NUMBER_OF_INSTANCES = 58509
 
 PATH = 'DriveDiagnosis/Sensorless_drive_diagnosis.txt'
-PATH_TRAIN_SET = 'UCI HAR Dataset/train/X_train.txt'
-PATH_TRAIN_LABELS = 'UCI HAR Dataset/train/y_train.txt'
-PATH_TEST_SET = 'UCI HAR Dataset/test/X_test.txt'
-PATH_TEST_LABELS = 'UCI HAR Dataset/test/y_test.txt'
 
 
 
@@ -44,21 +40,21 @@ def plot_training_history(history):
     
     # summarize history for accuracy
     plt.plot(history.history['acc'])
-    plt.title('model accuracy')
+    plt.title('Model accuracy')
     plt.ylabel('accuracy')
     plt.xlabel('epoch')
     plt.legend(['train'], loc='upper left')
     plt.show()
     # summarize history for loss
     plt.plot(history.history['loss'])
-    plt.title('model loss')
+    plt.title('Model loss')
     plt.ylabel('loss')
     plt.xlabel('epoch')
     plt.legend(['train'], loc='upper left')
     plt.show()
     
 
-def test_model(model):
+def test_model(model, X_train, y_train, X_test, y_test):
     """
     Trains keras model
     ::param model:: keras model
@@ -66,9 +62,9 @@ def test_model(model):
     """
  
     #train model
-    history = model.fit(X_train, y_train, epochs=150, verbose=1, 
-                        batch_size=124)
-    
+    history = model.fit(X_train, y_train, epochs=500, verbose=1, 
+                        batch_size=124, validation_split=0.3)
+
     #test
     results = model.evaluate(X_test, y_test)
     
@@ -186,7 +182,7 @@ def find_smallnetwork(mat, layers):
     Dlocals = []
     ps = []
     p = 0.0
-    while p<=1.0:
+    while p<=0.76:
         mat2 = np.array(mat)
         mat1 = utils.rewire_to_smallworld(mat2,layers,p)
         graph = nx.from_numpy_matrix(mat1, create_using=nx.MultiDiGraph())
@@ -212,32 +208,36 @@ if __name__ == "__main__":
     #y = to_categorical(y, num_classes=2)
     
     #split to trainign and testing data
-    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2,
-                                                        random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.70)
+    
     #get neural network
     model, layers = models.model_orig()
-    #model = models.model_dropout()
-    test_model(model)
+#    model = models.model_dropout()
+
+#    test_model(model, X_train, y_train, X_test, y_test)
+
     
     
-    graph, mat = ann_to_graph(layers)
+    
+#    graph, mat = ann_to_graph(layers)
     
     
-    # rewire connections
+     #rewire connections
 #    Dglobals, Dlocals, p = find_smallnetwork(mat, layers)
 #    
 #    for i in range(len(Dglobals)):
 #        Dglobals[i] = 1/Dglobals[i]
 #        Dlocals[i] = 1/Dlocals[i]
-#        
-#        
+#               
 #    plt.scatter(p, Dglobals)
+#    plt.show()
 #    plt.scatter(p, Dlocals)
-    
-    rewired_mat = utils.rewire_to_smallworld(mat, layers, 0.6)
-    new_layers = graph_to_ann(rewired_mat, layers)
-    new_model = models.model_rewired(new_layers)
-    test_model(new_model)
+#    plt.show()
+#    
+#    rewired_mat = utils.rewire_to_smallworld(mat, layers, 0.3)
+#    new_layers = graph_to_ann(rewired_mat, layers)
+#    new_model = models.model_rewired(new_layers)
+#    test_model(new_model, X_train, y_train, X_test, y_test)
 
     
     

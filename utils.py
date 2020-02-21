@@ -44,11 +44,13 @@ def load_csv(path, nroAttributes):
    
     with open(path, 'r') as csvfile:
         reader = csv.reader(csvfile, delimiter=' ', quotechar='|')
+        next(reader)
         for row in reader:
             if len(row)==0:
                 break
-            result = [x for x in row if x != ''] 
-            attList.append(row[0:nroAttributes-1])
+            
+#            result = [x for x in row if x != ''] 
+            attList.append(row[1:nroAttributes-1])
             classList.append(row[-1])
 
     #convert attributes to floats
@@ -157,7 +159,7 @@ def rewire_to_smallworld(adjmat, layers, p):
     
     for row in range(mat.shape[0]):
         column = row+1
-        while column < mat.shape[0]:
+        while column < mat.shape[0]-layers[0].shape[1]:
             
             if mat[row, column] == 1 and decision(p) and (row,column) not in rewired:
                 while True:
