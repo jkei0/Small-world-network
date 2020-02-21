@@ -214,7 +214,7 @@ if __name__ == "__main__":
     model, layers = models.model_orig()
 #    model = models.model_dropout()
 
-#    test_model(model, X_train, y_train, X_test, y_test)
+    test_model(model, X_train, y_train, X_test, y_test)
 
     
     
