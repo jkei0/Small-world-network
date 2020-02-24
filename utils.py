@@ -13,6 +13,53 @@ import networkx as nx
 import random
 
 
+def normalize(x):
+    """
+        argument
+            - x: input image data in numpy array [32, 32, 3]
+        return
+            - normalized x 
+    """
+    min_val = np.min(x)
+    max_val = np.max(x)
+    x = (x-min_val) / (max_val-min_val)
+    return x
+
+
+def unpickle(file):
+    import pickle
+    with open(file, 'rb') as fo:
+        dict = pickle.load(fo, encoding='bytes')
+    return dict
+
+def get_cifar_data(path1, path2, path3, path4, path5, path6):
+    dic1 = unpickle(path1)
+    X_train = dic1[b'data']
+    y_train = dic1[b'labels']
+    
+    dic2 = unpickle(path2)
+    X_train = np.append(X_train, dic2[b'data'], axis=0)
+    y_train = np.append(y_train, dic2[b'labels'], axis=0)
+    
+    dic3 = unpickle(path3)
+    X_train = np.append(X_train, dic3[b'data'], axis=0)
+    y_train = np.append(y_train, dic3[b'labels'], axis=0)
+    
+    dic4 = unpickle(path4)
+    X_train = np.append(X_train, dic4[b'data'], axis=0)
+    y_train = np.append(y_train, dic4[b'labels'], axis=0)
+    
+    dic5 = unpickle(path5)
+    X_train = np.append(X_train, dic5[b'data'], axis=0)
+    y_train = np.append(y_train, dic5[b'labels'], axis=0)
+    
+    dic6 = unpickle(path6)
+    X_test = dic6[b'data']
+    y_test = dic6[b'labels']
+    
+    return X_train, y_train, X_test, y_test
+
+
 def classes_to_int(classes):
     """
     Maps different class names to integers
@@ -43,15 +90,15 @@ def load_csv(path, nroAttributes):
     classList = []
    
     with open(path, 'r') as csvfile:
-        reader = csv.reader(csvfile, delimiter=' ', quotechar='|')
-        next(reader)
+        reader = csv.reader(csvfile, delimiter=',', quotechar='|')
+        #next(reader)
         for row in reader:
             if len(row)==0:
                 break
             
 #            result = [x for x in row if x != ''] 
-            attList.append(row[1:nroAttributes-1])
-            classList.append(row[-1])
+            attList.append(row[1:nroAttributes+1])
+            classList.append(row[0])
 
     #convert attributes to floats
     for i in range(len(attList[0])):

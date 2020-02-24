@@ -14,6 +14,8 @@ from keras.optimizers import Adam
 import numpy as np
 import sparseconnection as sp
 
+INPUT = 3072
+OUTPUT = 10
 
 def model_dense():
     model = Sequential()
@@ -26,7 +28,7 @@ def model_dense():
 
 
     
-    model.add(Dense(11, activation='softmax'))
+    model.add(Dense(OUTPUT, activation='softmax'))
     
     model.compile(optimizer='adam', 
             loss='sparse_categorical_crossentropy', metrics=['accuracy'])
@@ -59,7 +61,7 @@ def model_weight_reg():
                     activity_regularizer=regularizers.l1(l1)))
  
     
-    model.add(Dense(11, activation='softmax'))
+    model.add(Dense(OUTPUT, activation='softmax'))
     
     model.compile(optimizer='adam', 
             loss='sparse_categorical_crossentropy', metrics=['accuracy'])
@@ -70,7 +72,7 @@ def model_weight_reg():
     
 
 def model_dropout():
-    dropout = 0.1
+    dropout = 0.3
     
     model = Sequential()
     
@@ -88,7 +90,7 @@ def model_dropout():
 
 
     
-    model.add(Dense(11, activation='softmax'))
+    model.add(Dense(OUTPUT, activation='softmax'))
     
     model.compile(optimizer='adam', 
             loss='sparse_categorical_crossentropy', metrics=['accuracy'])
@@ -99,7 +101,7 @@ def model_dropout():
 def model_orig():
     
     
-    inp = Input(shape=(47,))
+    inp = Input(shape=(INPUT,))
     
     #first layer
     l1 = Dense(32, activation='relu')(inp)
@@ -135,9 +137,9 @@ def model_orig():
     
     
     #output layer
-    mat7 = np.zeros((32*6, 11))
+    mat7 = np.zeros((32*6, OUTPUT))
     mat7[32*5:, :] = 1
-    out = sp.CustomConnected(11, connections=mat7, activation='softmax')(z)
+    out = sp.CustomConnected(OUTPUT, connections=mat7, activation='softmax')(z)
     
     model = Model(inp, out)
     model.compile(optimizer='adam', 
@@ -149,7 +151,8 @@ def model_orig():
     return model, layers
 
 def model_rewired(layers):
-    inp = Input(shape=(47,))
+    inp = Input(shape=(INPUT,))
+    
     
     #first layer
     l1 = Dense(32, activation='relu')(inp)
@@ -176,7 +179,54 @@ def model_rewired(layers):
     
     
     #output
-    out = sp.CustomConnected(11, connections=layers[0], activation='softmax')(z)
+    out = sp.CustomConnected(OUTPUT, connections=layers[0], activation='softmax')(z)
+    
+    model = Model(inp, out)
+    model.compile(optimizer='adam', 
+                  loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    
+    return model
+
+def model_rewired_weight_reg(layers):
+
+    la1 = 0.000001
+    la2 = 0.00001    
+
+    inp = Input(shape=(INPUT,))
+    
+    
+    #first layer
+    l1 = Dense(32, activation='relu', kernel_regularizer=regularizers.l2(la2), 
+                    activity_regularizer=regularizers.l1(la1))(inp)
+    
+    #second
+    l2 = sp.CustomConnected(32, connections=layers[5], activation='relu', kernel_regularizer=regularizers.l2(la2), 
+                    activity_regularizer=regularizers.l1(la1))(l1)
+    z = concatenate([l1, l2])
+    
+    #third
+    l3 = sp.CustomConnected(32, connections=layers[4], activation='relu', kernel_regularizer=regularizers.l2(la2), 
+                    activity_regularizer=regularizers.l1(la1))(z)
+    z = concatenate([z,l3])
+    
+    #forth 
+    l4 = sp.CustomConnected(32,connections=layers[3], activation='relu', kernel_regularizer=regularizers.l2(la2), 
+                    activity_regularizer=regularizers.l1(la1))(z)
+    z = concatenate([z, l4])
+    
+    #fifth
+    l5 = sp.CustomConnected(32, connections=layers[2], activation='relu', kernel_regularizer=regularizers.l2(la2), 
+                    activity_regularizer=regularizers.l1(la1))(z)
+    z = concatenate([z, l5])
+    
+    #sixth
+    l6 = sp.CustomConnected(32, connections=layers[1], activation='relu', kernel_regularizer=regularizers.l2(la2), 
+                    activity_regularizer=regularizers.l1(la1))(z)
+    z = concatenate([z, l6])
+    
+    
+    #output
+    out = sp.CustomConnected(OUTPUT, connections=layers[0], activation='softmax')(z)
     
     model = Model(inp, out)
     model.compile(optimizer='adam', 

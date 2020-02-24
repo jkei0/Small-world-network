@@ -24,10 +24,15 @@ import utils
 from networkx.exception import NetworkXNoPath
 from itertools import permutations
 
-NUMBER_OF_ATTRIBUTES = 49
-NUMBER_OF_INSTANCES = 58509
+NUMBER_OF_ATTRIBUTES = 16
+NUMBER_OF_INSTANCES = 20000
 
-PATH = 'DriveDiagnosis/Sensorless_drive_diagnosis.txt'
+PATH1 = 'cifar-10-batches-py/data_batch_1'
+PATH2 = 'cifar-10-batches-py/data_batch_2'
+PATH3 = 'cifar-10-batches-py/data_batch_3'
+PATH4 = 'cifar-10-batches-py/data_batch_4'
+PATH5 = 'cifar-10-batches-py/data_batch_5'
+PATH6 = 'cifar-10-batches-py/test_batch'
 
 
 
@@ -62,8 +67,8 @@ def test_model(model, X_train, y_train, X_test, y_test):
     """
  
     #train model
-    history = model.fit(X_train, y_train, epochs=500, verbose=1, 
-                        batch_size=124, validation_split=0.3)
+    history = model.fit(X_train, y_train, epochs=300, verbose=1, 
+                        batch_size=124, validation_split=0.1)
 
     #test
     results = model.evaluate(X_test, y_test)
@@ -72,7 +77,7 @@ def test_model(model, X_train, y_train, X_test, y_test):
     print("Final test set accuracy {}".format(results[1]))
     
     plot_training_history(history)
-    return history
+    return history, results[1]
 
     
 def ann_to_graph(layers):
@@ -110,8 +115,8 @@ def ann_to_graph(layers):
     graph = nx.from_numpy_matrix(mat)
     
     #vizualise NN
-    vis = nx.nx_pydot.to_pydot(graph)
-    vis.write_png('example2_graph.png')
+    #vis = nx.nx_pydot.to_pydot(graph)
+    #vis.write_png('example2_graph.png')
     
     return graph, mat
 
@@ -196,30 +201,34 @@ def find_smallnetwork(mat, layers):
         p = p+0.02
             
     return Dglobals, Dlocals, ps
-            
+
         
 if __name__ == "__main__":
     
     #load dataset
-    x,y =utils.load_csv(PATH, NUMBER_OF_ATTRIBUTES)
-    
+    #x,y =utils.load_csv(PATH, NUMBER_OF_ATTRIBUTES)
+    X_train, y_train, X_test, y_test = utils.get_cifar_data(PATH1,PATH2,PATH3,PATH4,PATH5,PATH6)
+    X_train = utils.normalize(X_train)
+    X_test = utils.normalize(X_test)
+
     #convert labels to integers
-    y = utils.classes_to_int(y)
+    #y = utils.classes_to_int(y)
     #y = to_categorical(y, num_classes=2)
     
     #split to trainign and testing data
-    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.70)
+    #X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2)
     
     #get neural network
     model, layers = models.model_orig()
-#    model = models.model_dropout()
+    #model_dense = models.model_dense()
+    results = []
+    modelss = ['Dense', 'Small-world with weight reg', 'Small-world', 'Dropout', 'Weight reg']
 
-    test_model(model, X_train, y_train, X_test, y_test)
-
+    history_dense, result = test_model(model, X_train, y_train, X_test, y_test)
+    results.append(result)
+        
     
-    
-    
-#    graph, mat = ann_to_graph(layers)
+    graph, mat = ann_to_graph(layers)
     
     
      #rewire connections
@@ -234,12 +243,50 @@ if __name__ == "__main__":
 #    plt.scatter(p, Dlocals)
 #    plt.show()
 #    
-#    rewired_mat = utils.rewire_to_smallworld(mat, layers, 0.3)
-#    new_layers = graph_to_ann(rewired_mat, layers)
-#    new_model = models.model_rewired(new_layers)
-#    test_model(new_model, X_train, y_train, X_test, y_test)
+    rewired_mat = utils.rewire_to_smallworld(mat, layers, 0.4)
+    new_layers = graph_to_ann(rewired_mat, layers)
+    
+    model_small_weight = models.model_rewired_weight_reg(new_layers)
+    history_small_weight, result = test_model(model_small_weight, X_train, y_train, X_test, y_test)
+    results.append(result)
+    
+    new_model = models.model_rewired(new_layers)
+    history_small, result = test_model(new_model, X_train, y_train, X_test, y_test)
+    results.append(result)
+    
+    model_dropout = models.model_dropout()
+    history_dropout, result = test_model(model_dropout,X_train, y_train, X_test, y_test)
+    results.append(result)
+    
+    model_weight_reg = models.model_weight_reg()
+    history_weight, result = test_model(model_weight_reg, X_train, y_train, X_test, y_test)
+    results.append(result)
+    
 
+    # summarize history for accuracy
+    plt.plot(history_dense.history['acc'], color='green', label='Dense')
+    plt.plot(history_small.history['acc'], color='red', label='small-world')
+    plt.plot(history_dropout.history['acc'], color='blue', label='Dropout')
+    plt.plot(history_weight.history['acc'], color='yellow', label='weight regularization')
+    plt.plot(history_small_weight.history['acc'], color='magenta', label='small-world with weight regularization')
+    plt.title('Model accuracy')
+    plt.ylabel('accuracy')
+    plt.xlabel('epoch')
+    plt.legend(loc='lower right')
+    plt.show()
     
+    plt.plot(history_dense.history['loss'], color='green', label='Dense')
+    plt.plot(history_small.history['loss'], color='red', label='small-world')
+    plt.plot(history_dropout.history['loss'], color='blue', label='Dropout')
+    plt.plot(history_weight.history['loss'], color='yellow', label='weight regularization')
+    plt.plot(history_small_weight.history['loss'], color='magenta', label='small-world with weight regularization')
+    plt.title('Model loss')
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    plt.legend(loc='upper right')
+    plt.show()
     
+    for i in range(len(results)):
+        print('Test accuracy with {} network {}'.format(modelss[i], results[i]))
     
     
