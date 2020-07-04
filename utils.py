@@ -73,9 +73,14 @@ def classes_to_int(classes):
     
 
 def str_column_to_float(dataset, column):
-    for row in dataset:
+    for row in dataset:      
+        
+        if(row[column] == ""):
+            row[column] = "0"
+        
+        row[column] = row[column].replace(",", ".")
         row[column]=float(row[column].strip())
-                
+
         
 def load_csv(path, nroAttributes):
     """
@@ -90,15 +95,20 @@ def load_csv(path, nroAttributes):
     classList = []
    
     with open(path, 'r') as csvfile:
-        reader = csv.reader(csvfile, delimiter=',', quotechar='|')
-        #next(reader)
+        reader = csv.reader(csvfile, delimiter=' ', quotechar='|')
+        next(reader)
         for row in reader:
             if len(row)==0:
                 break
             
-#            result = [x for x in row if x != ''] 
-            attList.append(row[1:nroAttributes+1])
-            classList.append(row[0])
+            try: 
+               # result = [x for x in row if x != ''] 
+                attList.append(row[0:nroAttributes-1])
+                classList.append(row[-1])
+            except IndexError:
+                print(row)
+                        
+    #classList = classList[0:len(classList)-3]
 
     #convert attributes to floats
     for i in range(len(attList[0])):
@@ -206,7 +216,7 @@ def rewire_to_smallworld(adjmat, layers, p):
     
     for row in range(mat.shape[0]):
         column = row+1
-        while column < mat.shape[0]-layers[0].shape[1]:
+        while column < mat.shape[0]:
             
             if mat[row, column] == 1 and decision(p) and (row,column) not in rewired:
                 while True:
@@ -222,3 +232,125 @@ def rewire_to_smallworld(adjmat, layers, p):
                         break
             column = column+1
     return mat
+
+
+    
+def ann_to_graph(layers):
+    """
+    Generates graph from ANN connection matrices
+    ::param layers:: list of numpy matrices that maps connections between ANN neurons
+    ::output graph:: networkx graph object
+    ::output mat:: graph adjacency matrix
+    """
+       
+    #Generate adjacency matrix
+    mat = np.zeros((layers[0].shape[0]+11,layers[0].shape[0]+11))
+    i = -1
+    for layer in layers:
+        if layer.ndim == 1:
+            layer = layer.reshape((layer.shape[0], 1))
+        
+        if layer.shape[1] == 1:
+            mat[0:layer.shape[0],i:] = layer
+            mat[i, 0:layer.shape[0]] = np.transpose(layer)
+            
+        elif i == -1:
+            mat[0:layer.shape[0], -layer.shape[1]:] = layer
+            mat[-layer.shape[1]:, 0:layer.shape[0]] = np.transpose(layer)
+            
+        else:
+            mat[0:layer.shape[0], -layer.shape[1]+i+1:i+1] = layer
+            mat[i-layer.shape[1]+1:i+1, 0:layer.shape[0]] = np.transpose(layer)
+            
+        i = i - layer.shape[1]
+        
+    #mat[0:16, 16:32] = 1
+        
+    # turn into networkx graph
+    graph = nx.from_numpy_matrix(mat)
+    
+    #vizualise NN
+    #vis = nx.nx_pydot.to_pydot(graph)
+    #vis.write_png('example2_graph.png')
+    
+    return graph, mat
+
+
+def graph_to_ann(mat, layers):
+    """
+    Generates ANN connection matrices from graph adjacency matrix
+    ::param mat:: adjacency matrix
+    ::param layers:: list of correct size numpy matrices
+    ::output layers:: list of numpy matrices that maps connections between ANN neurons 
+    """
+
+    i = -1
+    for j in range(len(layers)):
+        
+        if layers[j].shape[1] == 1:
+            layers[j] = mat[0:layers[j].shape[0], i:]
+            
+        elif i == -1:
+            layers[j] = mat[0:layers[j].shape[0], -layers[j].shape[1]:]
+        
+        else:
+            layers[j] = mat[0:layers[j].shape[0], -layers[j].shape[1]+i+1:i+1]
+        
+        i = i - layers[j].shape[1]
+        
+    return layers
+
+
+def measure_small_worldness(mat):
+    """
+    Measures small-wordliness of graph
+    ::param mat:: graph adjacency matrix
+    ::output Dglobal:: global efficiensy of graph
+    ::output Dlocal:: local efficiensy of graph
+    """
+
+    graph = nx.from_numpy_matrix(mat)
+    """
+    
+    random_clustering, random_path, lattice_cluster, lattice_path = get_random_graph_coeffs(mat)
+    
+    clustering_coeff = nx.algorithms.cluster.average_clustering(graph)
+    shortest_path = nx.average_shortest_path_length(graph)
+    small_world_coeff = (random_path/shortest_path) - (clustering_coeff/lattice_cluster)
+    """
+    Dlocal = local_efficiency(graph)
+    Dglobal = global_efficiency(graph)
+    
+    return Dglobal, Dlocal
+        
+
+def find_smallnetwork(mat, layers):
+    """
+    Function rewires given graph with multiple probabilites p, and stores 
+    Dglobal and Dlocal values, tries to find values p which gives best 
+    representation of small-worldiness of graph
+    ::param mat:: graph adjacency matrix
+    ::param layers:: numpy matrices that maps connections between neurons in ANN
+    ::output Dglobals:: list of Dglobal values
+    ::output Dlocal:: list of Dlocal values
+    ::output ps:: list of probabilities
+    """
+
+    Dglobals = []
+    Dlocals = []
+    ps = []
+    p = 0.0
+    while p<=1:
+        mat2 = np.array(mat)
+        mat1 = rewire_to_smallworld(mat2,layers,p)
+        graph = nx.from_numpy_matrix(mat1, create_using=nx.MultiDiGraph())
+        remove_wrong_edges(graph)
+        global_eff = global_efficiency(graph)
+        local_eff = local_efficiency(graph)
+        Dglobals.append(global_eff)
+        Dlocals.append(local_eff)
+        ps.append(p)
+        p = p+0.02
+            
+    return Dglobals, Dlocals, ps
+
