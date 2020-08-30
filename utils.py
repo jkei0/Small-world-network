@@ -244,7 +244,7 @@ def ann_to_graph(layers):
     """
        
     #Generate adjacency matrix
-    mat = np.zeros((layers[0].shape[0]+11,layers[0].shape[0]+11))
+    mat = np.zeros((layers[0].shape[0]+4,layers[0].shape[0]+4))
     i = -1
     for layer in layers:
         if layer.ndim == 1:
@@ -322,7 +322,40 @@ def measure_small_worldness(mat):
     Dglobal = global_efficiency(graph)
     
     return Dglobal, Dlocal
+
         
+def rewire_num_connections(adjmat, layers, num_connections):
+    
+    mat = np.array(adjmat)
+    rewired = []
+    
+    rew_con = 0
+    
+    while rew_con < num_connections:
+        
+        row = random.randint(0, mat.shape[1]-1)
+        col = random.randint(0, mat.shape[1]-1)
+        
+        new_col = random.randint(0, mat.shape[1]-1)
+        
+        if mat[row,col] == 1 and (row,col) not in rewired and (row,new_col) not in rewired:
+            if check_if_neighbour(row, new_col, layers) and mat[row, new_col] == 0:
+                
+                rewired.append((row,col))
+                rewired.append((row, new_col))
+                rewired.append((col, row))
+                rewired.append((new_col, row))
+                
+                mat[row,col] = 0
+                mat[col, row] = 0
+                
+                mat[row, new_col] = 1
+                mat[new_col, row] = 1
+                
+                rew_con = rew_con + 1
+                
+    return mat
+
 
 def find_smallnetwork(mat, layers):
     """
@@ -339,10 +372,10 @@ def find_smallnetwork(mat, layers):
     Dglobals = []
     Dlocals = []
     ps = []
-    p = 0.0
-    while p<=1:
-        mat2 = np.array(mat)
-        mat1 = rewire_to_smallworld(mat2,layers,p)
+    p = 0
+    while p<=4500:
+        mat2 = np.copy(mat)
+        mat1 = rewire_num_connections(mat2,layers,p)
         graph = nx.from_numpy_matrix(mat1, create_using=nx.MultiDiGraph())
         remove_wrong_edges(graph)
         global_eff = global_efficiency(graph)
@@ -350,7 +383,7 @@ def find_smallnetwork(mat, layers):
         Dglobals.append(global_eff)
         Dlocals.append(local_eff)
         ps.append(p)
-        p = p+0.02
+        p = p+200
             
     return Dglobals, Dlocals, ps
 

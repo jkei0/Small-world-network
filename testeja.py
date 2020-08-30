@@ -10,16 +10,17 @@ import csv
 from sklearn import preprocessing
 import numpy as np
 from sklearn.model_selection import train_test_split
-from keras.models import Sequential, Model
-from keras.layers import Dense, Dropout, Input, concatenate
+from tensorflow.keras.models import Sequential, Model
+from tensorflow.keras.layers import Dense, Dropout, Input, concatenate
 from keras import regularizers
 from keras.optimizers import Adam
 from keras.constraints import maxnorm
-import keras.backend as K
+import tensorflow.keras.backend as K
 import random
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+import networkx as nx
 
 
 PATHDRIVE = 'avila/avila/avila-tr.txt'
@@ -28,10 +29,10 @@ PATH_ACC = 'dataframe/data_acc11.pkl'
 NUMBER_OF_ATTRIBUTES = 10
 NUMBER_OF_INSTANCES = 58509
 EPOCHS = 400
-INPUT = 10
-OUTPUT = 12
+INPUT = 4
+OUTPUT = 4
 optimizer='adam'
-NUM_NODES = 16
+NUM_NODES = 128
 NUM_MODELS = 4
 TEST_SIZE = 0.8
 SWPARA = 0.7
@@ -142,7 +143,6 @@ def get_cifar_data(path1, path2, path3, path4, path5, path6):
     return X_train, y_train, X_test, y_test
 
 def model_orig():
-    
     
     
     inp = Input(shape=(INPUT,))
@@ -287,8 +287,9 @@ def rewire_to_smallworld(adjmat, layers, p):
                 while True:
                     new_col = random.randint(0, mat.shape[1]-1)
                     new_ind = (row, new_col)
-                    if (check_if_neighbour(row, new_col, layers)) and mat[new_ind]==0:
+                    if (check_if_neighbour(row, new_col, layers)) and mat[new_ind]==0 and new_ind not in rewired:
                         rewired.append(new_ind)
+                        rewired.append((row,column))
                         mat[row,column] = 0
                         mat[column,row] = 0
                         
@@ -296,6 +297,38 @@ def rewire_to_smallworld(adjmat, layers, p):
                         mat[new_col,row] = 1
                         break
             column = column+1
+    return mat
+
+def rewire_num_connections(adjmat, layers, num_connections):
+    
+    mat = np.array(adjmat)
+    rewired = []
+    
+    rew_con = 0
+    
+    while rew_con < num_connections:
+        
+        row = random.randint(0, mat.shape[1]-1)
+        col = random.randint(0, mat.shape[1]-1)
+        
+        new_col = random.randint(0, mat.shape[1]-1)
+        
+        if mat[row,col] == 1 and (row,col) not in rewired and (row,new_col) not in rewired:
+            if check_if_neighbour(row, new_col, layers) and mat[row, new_col] == 0:
+                
+                rewired.append((row,col))
+                rewired.append((row, new_col))
+                rewired.append((col, row))
+                rewired.append((new_col, row))
+                
+                mat[row,col] = 0
+                mat[col, row] = 0
+                
+                mat[row, new_col] = 1
+                mat[new_col, row] = 1
+                
+                rew_con = rew_con + 1
+                
     return mat
 
 
@@ -333,9 +366,10 @@ def ann_to_graph(layers):
         
 
     #vizualise NN
-    #vis = nx.nx_pydot.to_pydot(graph)
-    #vis.write_png('example2_graph.png')
-    
+#    graph = nx.from_numpy_matrix(mat)
+#    vis = nx.nx_pydot.to_pydot(graph)
+#    vis.write_png('example2_graph.png')
+#    
     return mat
 
 
@@ -584,123 +618,156 @@ def test_model(model, X_train, y_train, X_test, y_test):
     
     return history
 
+def model_orig1(obs_space, num_outputs):
+        
+    #input layer
+    input_layer = Input(shape=(obs_space,), name="observation")
+        
+    #first layer
+    mat1 = np.ones((obs_space, NUM_NODES))
+    layer_1 = CustomConnected(NUM_NODES, connections=mat1, activation='tanh')(input_layer)
+    z = concatenate([input_layer, layer_1])
+      
+    #second layer
+    mat2 = np.zeros((obs_space+NUM_NODES, NUM_NODES))
+    mat2[obs_space:,:] = 1
+    layer_2 = CustomConnected(NUM_NODES, connections=mat2, activation='tanh')(z)
+    z = concatenate([z, layer_2])
+        
+    #output layer
+    mat3 = np.zeros((obs_space+NUM_NODES*2, num_outputs))
+    mat3[obs_space+NUM_NODES:,:] = 1
+    layer_out = CustomConnected(num_outputs, connections=mat3, activation=None)(z)
+       
+    model = Model(input_layer, layer_out)
+    layers = [mat3, mat2, mat1]
+      
+    return model, layers 
 
 if __name__ == "__main__":
-
-    x,y =load_csv(PATHDRIVE, NUMBER_OF_ATTRIBUTES)
-    #x = normalize(x)
     
-    
-    #convert labels to integers
-    y = classes_to_int(y)
-
-    #split to trainign and testing data
-    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=TEST_SIZE)
-    X_test = X_test[0:1000]
-    y_test = y_test[0:1000]
-    
-
-    model, layers = model_orig()
+    model, layers = model_orig1(4, 2)
     mat = ann_to_graph(layers)
+    swmat = rewire_num_connections(mat, layers, 400)
+    new_layers = graph_to_ann(swmat, layers)
+    #model = model_rewired(new_layers)
     
-        
-    index = []
-    data = []
-    modelss = []
-    accu = []
-    
-    # Dense
-    for i in range(NUM_MODELS):
-        
-        
-        
-        model = model_dense()
-        
-        history = test_model(model, X_train, y_train, X_test, y_test)
-        
-        index = index + list(range(0, EPOCHS))
-        data = data + history.history['val_acc']
-        modelss = modelss + ["Dense"] * EPOCHS
-        accu = accu + history.history['acc']
-
-
-    dataframe = pd.DataFrame((index,data), dtype=float).T
-    dataframe.columns=["epochs", "Test accuracy"]
-    dataframe['Model'] = modelss
-    
-    dataframe_acc = pd.DataFrame((index, accu)).T
-    dataframe_acc.columns=["epochs", "Train accuracy"]
-    dataframe_acc['Model'] = modelss
     
 
-    modelss = []
-    index = []
-    data = []
-    accu = []
-    
-    #dropout
-    for i in range(NUM_MODELS):
-        
-               
-        model = model_dropout()
-        
-        history = test_model(model, X_train, y_train, X_test, y_test)
-        
-        index = index + list(range(0, EPOCHS))
-        data = data + history.history['val_acc']
-        modelss = modelss + ["Dropout"] * EPOCHS
-        accu = accu + history.history['acc']
-        
-
-    p = pd.DataFrame((index,data)).T
-    p.columns=["epochs", "Test accuracy"]
-    p['Model'] = modelss
-    
-    d = pd.DataFrame((index,accu)).T
-    d.columns=["epochs", "Train accuracy"]
-    d['Model'] = modelss
-    
-    dataframe_acc = dataframe_acc.append(d)
-    
-    dataframe = dataframe.append(p)
-    
-    
-    modelss = []
-    index = []
-    data = []
-    accu = []
-        
-
-    #dropout 0
-    for i in range(NUM_MODELS):
-        
-               
-        model = model_dropout_0()
-        
-        history = test_model(model, X_train, y_train, X_test, y_test)
-        
-        index = index + list(range(0, EPOCHS))
-        data = data + history.history['val_acc']
-        modelss = modelss + ["Dropout 0"] * EPOCHS
-        accu = accu + history.history['acc']
-        
-
-    p = pd.DataFrame((index,data)).T
-    p.columns=["epochs", "Test accuracy"]
-    p['Model'] = modelss
-    
-    d = pd.DataFrame((index,accu)).T
-    d.columns=["epochs", "Train accuracy"]
-    d['Model'] = modelss
-    
-    dataframe_acc = dataframe_acc.append(d)
-    
-    dataframe = dataframe.append(p)
-    
-        
-
-    plot_testacc= sns.lineplot(x="epochs", y="Test accuracy", hue='Model', data=dataframe)
-    plt.show()
-    plot_trainacc = sns.lineplot(x="epochs", y="Train accuracy", hue='Model', data=dataframe_acc)
-    plt.show()
+#    x,y =load_csv(PATHDRIVE, NUMBER_OF_ATTRIBUTES)
+#    #x = normalize(x)
+#    
+#    
+#    #convert labels to integers
+#    y = classes_to_int(y)
+#
+#    #split to trainign and testing data
+#    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=TEST_SIZE)
+#    X_test = X_test[0:1000]
+#    y_test = y_test[0:1000]
+#    
+#
+#    model, layers = model_orig()
+#    mat = ann_to_graph(layers)
+#    
+#        
+#    index = []
+#    data = []
+#    modelss = []
+#    accu = []
+#    
+#    # Dense
+#    for i in range(NUM_MODELS):
+#        
+#        
+#        
+#        model = model_dense()
+#        
+#        history = test_model(model, X_train, y_train, X_test, y_test)
+#        
+#        index = index + list(range(0, EPOCHS))
+#        data = data + history.history['val_acc']
+#        modelss = modelss + ["Dense"] * EPOCHS
+#        accu = accu + history.history['acc']
+#
+#
+#    dataframe = pd.DataFrame((index,data), dtype=float).T
+#    dataframe.columns=["epochs", "Test accuracy"]
+#    dataframe['Model'] = modelss
+#    
+#    dataframe_acc = pd.DataFrame((index, accu)).T
+#    dataframe_acc.columns=["epochs", "Train accuracy"]
+#    dataframe_acc['Model'] = modelss
+#    
+#
+#    modelss = []
+#    index = []
+#    data = []
+#    accu = []
+#    
+#    #dropout
+#    for i in range(NUM_MODELS):
+#        
+#               
+#        model = model_dropout()
+#        
+#        history = test_model(model, X_train, y_train, X_test, y_test)
+#        
+#        index = index + list(range(0, EPOCHS))
+#        data = data + history.history['val_acc']
+#        modelss = modelss + ["Dropout"] * EPOCHS
+#        accu = accu + history.history['acc']
+#        
+#
+#    p = pd.DataFrame((index,data)).T
+#    p.columns=["epochs", "Test accuracy"]
+#    p['Model'] = modelss
+#    
+#    d = pd.DataFrame((index,accu)).T
+#    d.columns=["epochs", "Train accuracy"]
+#    d['Model'] = modelss
+#    
+#    dataframe_acc = dataframe_acc.append(d)
+#    
+#    dataframe = dataframe.append(p)
+#    
+#    
+#    modelss = []
+#    index = []
+#    data = []
+#    accu = []
+#        
+#
+#    #dropout 0
+#    for i in range(NUM_MODELS):
+#        
+#               
+#        model = model_dropout_0()
+#        
+#        history = test_model(model, X_train, y_train, X_test, y_test)
+#        
+#        index = index + list(range(0, EPOCHS))
+#        data = data + history.history['val_acc']
+#        modelss = modelss + ["Dropout 0"] * EPOCHS
+#        accu = accu + history.history['acc']
+#        
+#
+#    p = pd.DataFrame((index,data)).T
+#    p.columns=["epochs", "Test accuracy"]
+#    p['Model'] = modelss
+#    
+#    d = pd.DataFrame((index,accu)).T
+#    d.columns=["epochs", "Train accuracy"]
+#    d['Model'] = modelss
+#    
+#    dataframe_acc = dataframe_acc.append(d)
+#    
+#    dataframe = dataframe.append(p)
+#    
+#        
+#
+#    plot_testacc= sns.lineplot(x="epochs", y="Test accuracy", hue='Model', data=dataframe)
+#    plt.show()
+#    plot_trainacc = sns.lineplot(x="epochs", y="Train accuracy", hue='Model', data=dataframe_acc)
+#    plt.show()
 

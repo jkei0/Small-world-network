@@ -17,13 +17,8 @@ from keras.utils.vis_utils import plot_model
 import keras.initializers
 import pandas as pd
 import seaborn as sns
-import networkx as nx
-from keras.utils import plot_model
 
-
-import models
 import utils
-from networkx.exception import NetworkXNoPath
 from itertools import permutations
 
 NUMBER_OF_ATTRIBUTES = 49
@@ -41,6 +36,35 @@ PATH5 = 'cifar-10-batches-py/data_batch_5'
 PATH6 = 'cifar-10-batches-py/test_batch'
 PATHCARD = 'cardiodata/CTG.csv'
 PATHMICE = 'micedata/Data_Cortex_Nuclear.csv'
+
+NUM_NODES = 128
+
+def model_orig(obs_space, num_outputs):
+
+     
+    #second layer
+    mat2 = np.ones((NUM_NODES, NUM_NODES))
+    
+    #third layer
+    mat3 = np.zeros((NUM_NODES*2, NUM_NODES))
+    mat3[NUM_NODES:,:] = 1
+    
+    #forth layer
+    mat4 = np.zeros((NUM_NODES*3, NUM_NODES))
+    mat4[NUM_NODES*2:,:] = 1
+    
+    #fifth layer
+    mat5 = np.zeros((NUM_NODES*4, NUM_NODES))
+    mat5[NUM_NODES*3:,:] = 1
+        
+    #output layer
+    mat6 = np.zeros((NUM_NODES*5, num_outputs))
+    mat6[NUM_NODES*4:,:] = 1
+        
+    #model = Model(input_layer, layer_out)
+    layers = [mat6, mat5, mat4, mat3, mat2]
+        
+    return layers
 
 
 def print_training_phase(model_name, i):
@@ -94,25 +118,49 @@ def test_model(model, X_train, y_train, X_test, y_test):
 
 if __name__ == "__main__":
     
+        
+    layers = model_orig(4, 2)
+        
+    _, mat = utils.ann_to_graph(layers)
+    
+    #rewire connections
+    Dglobals, Dlocals, p = utils.find_smallnetwork(mat, layers)
+    
+    for i in range(len(Dglobals)):
+        Dglobals[i] = 1/Dglobals[i]
+        Dlocals[i] = 1/Dlocals[i]
+               
+    fig, ax1 = plt.subplots()
+    ax1.set_xlabel('rewiring probability (p)')
+    ax1.set_ylabel('Dglobal', color='b')
+    ax1.scatter(p, Dglobals, color='b', marker='.')
+    ax1.set_ylabel("Dglobal", color='b')
+    
+    ax2 = ax1.twinx()
+    ax2.scatter(p, Dlocals, color='r', marker='.')
+    ax2.set_ylabel("Dlocal", color='r')
+    
+    plt.show()
+    
     #load dataset
 #    x,y =utils.load_csv(PATHDRIVE, NUMBER_OF_ATTRIBUTES)
 #    X_train, y_train, X_test, y_test = utils.get_cifar_data(PATH1,PATH2,PATH3,PATH4,PATH5,PATH6)
 #    X_train = utils.normalize(X_train)
 #    X_test = utils.normalize(X_test)
-    x,y = utils.load_csv(PATHDRIVE, NUMBER_OF_ATTRIBUTES)
+#    x,y = utils.load_csv(PATHDRIVE, NUMBER_OF_ATTRIBUTES)
     
 
     #convert labels to integers
-    y = utils.classes_to_int(y)
+#    y = utils.classes_to_int(y)
     #y = to_categorical(y, num_classes=2)
     
     #split to trainign and testing data
-    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.97)
-    X_test = X_test[0:1000]
-    y_test = y_test[0:1000]
-    
-    
-    model = models.model_dense()
+#    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.97)
+#    X_test = X_test[0:1000]
+#    y_test = y_test[0:1000]
+#    
+#    
+#    model = models.model_dense()
 #    test_model(model, X_train, y_train, X_test, y_test)
 
 
@@ -185,24 +233,6 @@ if __name__ == "__main__":
 #    model = models.model_dropout()
 #    test_model(model, X_train, y_train, X_test, y_test)
     
-     #rewire connections
-#    Dglobals, Dlocals, p = utils.find_smallnetwork(mat, layers)
-#    
-#    for i in range(len(Dglobals)):
-#        Dglobals[i] = 1/Dglobals[i]
-#        Dlocals[i] = 1/Dlocals[i]
-#               
-#    fig, ax1 = plt.subplots()
-#    ax1.set_xlabel('rewiring probability (p)')
-#    ax1.set_ylabel('Dglobal', color='b')
-#    ax1.scatter(p, Dglobals, color='b', marker='.')
-#    ax1.set_ylabel("Dglobal", color='b')
-#    
-#    ax2 = ax1.twinx()
-#    ax2.scatter(p, Dlocals, color='r', marker='.')
-#    ax2.set_ylabel("Dlocal", color='r')
-#    
-#    plt.show()
 
 #    
 #    index = []
