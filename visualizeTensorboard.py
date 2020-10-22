@@ -14,8 +14,11 @@ import seaborn as sns
 import numpy as np
 
 NUM_ITER = 500
-path = "../Downloads/Impala_smallworld"
-path2 = "../Downloads/Impala_dense"
+# small world path
+path = "../Downloads/PPO_prob_value"
+
+#dense path
+path2 = "../Downloads/PPODense"
 
 directory = os.fsencode(path)
 dir2 = os.fsencode(path2)
@@ -23,12 +26,12 @@ dir2 = os.fsencode(path2)
 data = pd.DataFrame().T
 dataDense = pd.DataFrame().T
 
-model = ["Small-world"] * NUM_ITER * 9
-modelD = ["Dense"] * NUM_ITER * 9
+model = ["Small-world"] * NUM_ITER * 8
+modelD = ["Dense"] * NUM_ITER * 8
 
 unit = ["a"]*NUM_ITER + ["b"]*NUM_ITER + ["c"]*NUM_ITER + ["d"]*NUM_ITER + ["e"]*NUM_ITER + ["f"] *NUM_ITER +\
         ["g"]*NUM_ITER + ["h"]*NUM_ITER + ["i"]*NUM_ITER + ["j"]*NUM_ITER + ["k"]*NUM_ITER + ["l"] *NUM_ITER +\
-        ["m"]*NUM_ITER + ["n"]*NUM_ITER + ["o"]*NUM_ITER + ["p"]*NUM_ITER + ["q"]*NUM_ITER + ["r"] *NUM_ITER
+        ["m"]*NUM_ITER + ["n"]*NUM_ITER + ["o"]*NUM_ITER + ["p"]*NUM_ITER
 
 for file in os.listdir(directory):
     filename = os.fsdecode(file)
@@ -51,7 +54,18 @@ result2 = dataDense["Reward"]
 
 data = pd.concat([dataDense, data])
 
+# episodes standard length
 plt.figure()
-sns.lineplot(x=data.index, y="Reward", hue="Model", data=data, units=unit, estimator=None)
+sns.lineplot(x="Timestep", y="Reward", hue="Model", data=data, units=unit, estimator=None)
 plt.figure()
-sns.lineplot(x=data.index, y="Reward", hue="Model", data=data)
+sns.lineplot(x="Timestep", y="Reward", hue="Model", data=data)
+
+# episodes length vary
+#plt.figure()
+#sns.lineplot(x=data.index, y="Reward", hue="Model", data=data, units=unit, estimator=None)
+#plt.figure()
+#sns.lineplot(x=data.index, y="Reward", hue="Model", data=data)
+
+
+
+

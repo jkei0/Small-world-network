@@ -378,18 +378,23 @@ if __name__== "__main__":
     ModelCatalog.register_custom_model(
             "keras_model", DenseModel)
     
-    tune.run(
-            run_or_experiment=ImpalaTrainer,
-            verbose=1,
-            stop={"training_iteration": 5},
-            name="dense 10",
-            config={                    
-                    "env": "BipedalWalker-v3",
-                    "framework": "tf",
-                    "num_gpus" : 0,
-                    "model": {
-                            "custom_model" : "keras_model"}
-                    })
+    seed = 1234
+    
+    for i in range(3):
+        tune.run(
+                run_or_experiment=ImpalaTrainer,
+                verbose=1,
+                stop={"training_iteration": 5},
+                name="dense 10",
+                config={                        
+                        "env": "BipedalWalker-v3",
+                        "framework": "tf",
+                        "num_gpus" : 0,
+                        "seed" : seed,
+                        "model": {
+                                "custom_model" : "keras_model"}
+                        })
+        seed = seed + 1000
         
     ray.shutdown()
 

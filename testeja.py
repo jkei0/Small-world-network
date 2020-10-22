@@ -1,270 +1,35 @@
-# -*- coding: utf-8 -*-
+
 """
-Created on Sat Mar 28 15:50:01 2020
+Created on Mon Jul 20 15:35:27 2020
 
-@author: jonik
+@author: joni
 """
 
-
-import csv
-from sklearn import preprocessing
-import numpy as np
-from sklearn.model_selection import train_test_split
+import tensorflow as tf
+import ray
+from ray import tune
+from ray.rllib.agents.ppo import PPOTrainer
+from ray.rllib.agents.sac import SACTrainer
+from ray.rllib.models import ModelCatalog
+from ray.rllib.models.tf.tf_modelv2 import TFModelV2
+from tensorflow.keras.layers import Dense, Input, concatenate
 from tensorflow.keras.models import Sequential, Model
-from tensorflow.keras.layers import Dense, Dropout, Input, concatenate
-from keras import regularizers
-from keras.optimizers import Adam
-from keras.constraints import maxnorm
+from ray.rllib.models.tf.misc import normc_initializer
 import tensorflow.keras.backend as K
+import numpy as np
 import random
-import matplotlib.pyplot as plt
-import pandas as pd
-import seaborn as sns
-import networkx as nx
 
 
-PATHDRIVE = 'avila/avila/avila-tr.txt'
-PATH = 'dataframe/data11.pkl'
-PATH_ACC = 'dataframe/data_acc11.pkl'
-NUMBER_OF_ATTRIBUTES = 10
-NUMBER_OF_INSTANCES = 58509
-EPOCHS = 400
-INPUT = 4
-OUTPUT = 4
-optimizer='adam'
 NUM_NODES = 128
-NUM_MODELS = 4
-TEST_SIZE = 0.8
-SWPARA = 0.7
+SEED = 12345
+NET_SEED = 12345
 
+VALUE_LAYERS = []
 
-class CustomConnected(Dense):
-    
-    def __init__(self, units, connections, **kwargs):
-        
-        # connection matrix
-        self.connections = connections
-        
-        super(CustomConnected, self).__init__(units,**kwargs)
-                
-    def call(self, inputs):
-        output = K.dot(inputs, self.kernel * self.connections)
-        if self.use_bias:
-            output = K.bias_add(output, self.bias)
-        if self.activation is not None:
-            output = self.activation(output)
-        return output
-    
-    def build(self, input_shape):
-        super(CustomConnected, self).build(input_shape)
-        weights = self.get_weights()
-        weights[0] = self.get_weights()[0] * self.connections
-        self.set_weights(weights)
+def change_glob_value(value_layers):
+    global VALUE_LAYERS
+    VALUE_LAYERS = value_layers
 
-
-def load_csv(path, nroAttributes):
-    """
-    loads csv files from UCI Machine learning repository
-    (https://archive.ics.uci.edu/ml/index.php) to numpy matrices
-    ::param path:: path of csv file
-    ::param nroAttributes:: number of attributes in dataset
-    ::output attributes:: attributes in numpy array
-    ::output classes:: classes in numpy array
-    """
-    attList = []
-    classList = []
-   
-    with open(path, 'r') as csvfile:
-        reader = csv.reader(csvfile, delimiter=',', quotechar='|')
-        next(reader)
-        next(reader)
-
-        for row in reader:
-            if len(row)==0:
-                break
-            
-            attList.append(row[0:nroAttributes])
-            classList.append(row[-1])
-
-    #convert attributes to floats
-    for i in range(len(attList[0])):
-        str_column_to_float(attList, i)
-
-    
-    # convert list to two numpy arrays, attributes and classes
-    attributes = np.asarray(attList)
-    #classes = np.asarray(classList)
-    #classes = np.array(classes)
-            
-    return attributes, classList
-
-def normalize(x):
-    """
-        argument
-            - x: input image data in numpy array [32, 32, 3]
-        return
-            - normalized x 
-    """
-    x = x / np.max(np.abs(x))
-    return x
-
-
-def unpickle(file):
-    import pickle
-    with open(file, 'rb') as fo:
-        dict = pickle.load(fo, encoding='bytes')
-    return dict
-
-def get_cifar_data(path1, path2, path3, path4, path5, path6):
-    dic1 = unpickle(path1)
-    X_train = dic1[b'data']
-    y_train = dic1[b'labels']
-    
-    dic2 = unpickle(path2)
-    X_train = np.append(X_train, dic2[b'data'], axis=0)
-    y_train = np.append(y_train, dic2[b'labels'], axis=0)
-    
-    dic3 = unpickle(path3)
-    X_train = np.append(X_train, dic3[b'data'], axis=0)
-    y_train = np.append(y_train, dic3[b'labels'], axis=0)
-    
-    dic4 = unpickle(path4)
-    X_train = np.append(X_train, dic4[b'data'], axis=0)
-    y_train = np.append(y_train, dic4[b'labels'], axis=0)
-    
-    dic5 = unpickle(path5)
-    X_train = np.append(X_train, dic5[b'data'], axis=0)
-    y_train = np.append(y_train, dic5[b'labels'], axis=0)
-    
-    dic6 = unpickle(path6)
-    X_test = dic6[b'data']
-    y_test = dic6[b'labels']
-    
-    return X_train, y_train, X_test, y_test
-
-def model_orig():
-    
-    
-    inp = Input(shape=(INPUT,))
-    
-    #first layer
-    l1 = Dense(NUM_NODES, activation='relu')(inp)
-    
-    #second layer
-    mat2 = np.ones((NUM_NODES,NUM_NODES))
-    l2 = CustomConnected(NUM_NODES, connections=mat2, activation='relu')(l1)
-    z = concatenate([l1, l2])
-    
-    #third layer
-    mat3 = np.zeros((NUM_NODES*2, NUM_NODES))
-    mat3[NUM_NODES:,:] = 1
-    l3 = CustomConnected(NUM_NODES,connections=mat3, activation='relu')(z)
-    z = concatenate([l1, l2, l3])
-    
-    #forth layer
-    mat4 = np.zeros((NUM_NODES*3, NUM_NODES))
-    mat4[NUM_NODES*2:,:] = 1
-    l4 = CustomConnected(NUM_NODES,connections=mat4, activation='relu')(z)
-    z = concatenate([l1, l2, l3, l4])
-    
-    #fifth layer
-    mat5 = np.zeros((NUM_NODES*4, NUM_NODES))
-    mat5[NUM_NODES*3:,:] = 1
-    l5 = CustomConnected(NUM_NODES,connections=mat5, activation='relu')(z)
-    z = concatenate([l1, l2, l3, l4, l5])
-    
-    #sixth layer
-    mat6 = np.zeros((NUM_NODES*5, NUM_NODES))
-    mat6[NUM_NODES*4:,:] = 1
-    l6 = CustomConnected(NUM_NODES,connections=mat6, activation='relu')(z)
-    z = concatenate([z, l6])
-    
-    
-    #output layer
-    mat7 = np.zeros((NUM_NODES*6, OUTPUT))
-    mat7[NUM_NODES*5:, :] = 1
-    out = CustomConnected(OUTPUT, connections=mat7, activation='softmax')(z)
-    
-    model = Model(inp, out)
-    model.compile(optimizer=optimizer, 
-                  loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-
-
-    layers = [mat7, mat6, mat5, mat4, mat3, mat2]
-    
-    return model, layers
-
-
-def model_dropout():
-    dropout = 0.1
-    
-    model = Sequential()
-    model.add(Dropout(0.1, input_shape=(INPUT,)))
-    model.add(Dense(NUM_NODES, input_shape=(INPUT,), activation='relu'))
-    model.add(Dropout(dropout))
-    model.add(Dense(NUM_NODES, activation='relu', kernel_constraint=maxnorm(4)))
-    model.add(Dropout(dropout))
-    model.add(Dense(NUM_NODES, activation='relu', kernel_constraint=maxnorm(4)))
-    model.add(Dropout(dropout))
-    model.add(Dense(NUM_NODES, activation='relu', kernel_constraint=maxnorm(4)))
-    model.add(Dropout(dropout))
-    model.add(Dense(NUM_NODES, activation='relu', kernel_constraint=maxnorm(4)))
-    model.add(Dropout(dropout))
-    model.add(Dense(NUM_NODES, activation='relu', kernel_constraint=maxnorm(4)))
-    model.add(Dense(OUTPUT, activation='softmax'))
-
-    opt = Adam(lr=0.001)
-
-    
-    model.compile(optimizer=opt, 
-            loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-    
-    return model
-
-def model_dropout_0():
-    dropout = 0.0
-    
-    model = Sequential()
-    model.add(Dropout(0.0, input_shape=(INPUT,)))
-    model.add(Dense(NUM_NODES, input_shape=(INPUT,), activation='relu'))
-    model.add(Dropout(dropout))
-    model.add(Dense(NUM_NODES, activation='relu'))
-    model.add(Dropout(dropout))
-    model.add(Dense(NUM_NODES, activation='relu'))
-    model.add(Dropout(dropout))
-    model.add(Dense(NUM_NODES, activation='relu'))
-    model.add(Dropout(dropout))
-    model.add(Dense(NUM_NODES, activation='relu'))
-    model.add(Dropout(dropout))
-    model.add(Dense(NUM_NODES, activation='relu'))
-    model.add(Dense(OUTPUT, activation='softmax'))
-
-    
-    model.compile(optimizer='adam', 
-            loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-    
-    return model
-    
-
-def classes_to_int(classes):
-    """
-    Maps different class names to integers
-    ::param classes:: list of classes
-    ::output y:: classes mapped to integers
-    """
-    le = preprocessing.LabelEncoder()
-    le.fit(classes)
-    y = le.transform(classes)
-    return y
-    
-
-def str_column_to_float(dataset, column):
-    for row in dataset:
-        if(row[column] == "?"):
-            row[column] = "0"
-        row[column] = row[column].replace(",", ".")
-        row[column]=float(row[column].strip())
-                
 
 def rewire_to_smallworld(adjmat, layers, p):
     """
@@ -287,9 +52,8 @@ def rewire_to_smallworld(adjmat, layers, p):
                 while True:
                     new_col = random.randint(0, mat.shape[1]-1)
                     new_ind = (row, new_col)
-                    if (check_if_neighbour(row, new_col, layers)) and mat[new_ind]==0 and new_ind not in rewired:
+                    if (check_if_neighbour(row, new_col, layers)) and mat[new_ind]==0:
                         rewired.append(new_ind)
-                        rewired.append((row,column))
                         mat[row,column] = 0
                         mat[column,row] = 0
                         
@@ -298,6 +62,7 @@ def rewire_to_smallworld(adjmat, layers, p):
                         break
             column = column+1
     return mat
+
 
 def rewire_num_connections(adjmat, layers, num_connections):
     
@@ -332,8 +97,7 @@ def rewire_num_connections(adjmat, layers, num_connections):
     return mat
 
 
-    
-def ann_to_graph(layers):
+def ann_to_graph(layers, OUTPUT):
     """
     Generates graph from ANN connection matrices
     ::param layers:: list of numpy matrices that maps connections between ANN neurons
@@ -362,14 +126,7 @@ def ann_to_graph(layers):
             
         i = i - layer.shape[1]
         
-    #mat[0:16, 16:32] = 1
-        
 
-    #vizualise NN
-#    graph = nx.from_numpy_matrix(mat)
-#    vis = nx.nx_pydot.to_pydot(graph)
-#    vis.write_png('example2_graph.png')
-#    
     return mat
 
 
@@ -415,359 +172,255 @@ def graph_to_ann(mat, layers):
         
     return layers
 
+def model_orig(obs_space, num_outputs):
 
-def model_dense():
-    model = Sequential()
-    model.add(Dense(NUM_NODES, input_shape = (INPUT,), activation='relu'))
-    model.add(Dense(NUM_NODES, activation='relu'))
-    model.add(Dense(NUM_NODES, activation='relu'))
-    model.add(Dense(NUM_NODES, activation='relu'))
-    model.add(Dense(NUM_NODES, activation='relu'))
-    model.add(Dense(NUM_NODES, activation='relu'))
-
-
-    
-    model.add(Dense(OUTPUT, activation='softmax'))
-    
-    model.compile(optimizer=optimizer, 
-            loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-    
-    return model
-
-def model_weight_reg():
-    l1 = 1e-07
-    l2 = 1e-06
-    
-    model = Sequential()
-    model.add(Dense(NUM_NODES, input_shape = (INPUT,), activation='relu', kernel_regularizer=regularizers.l2(l2), 
-                    activity_regularizer=regularizers.l1(l1)))
-    
-    model.add(Dense(NUM_NODES, activation='relu', kernel_regularizer=regularizers.l2(l2), 
-                    activity_regularizer=regularizers.l1(l1)))
-    
-    model.add(Dense(NUM_NODES, activation='relu', kernel_regularizer=regularizers.l2(l2), 
-                    activity_regularizer=regularizers.l1(l1)))
-
-    model.add(Dense(NUM_NODES, activation='relu', kernel_regularizer=regularizers.l2(l2), 
-                    activity_regularizer=regularizers.l1(l1)))
-    
-    model.add(Dense(NUM_NODES, activation='relu', kernel_regularizer=regularizers.l2(l2), 
-                    activity_regularizer=regularizers.l1(l1)))
-    
-    model.add(Dense(NUM_NODES, activation='relu', kernel_regularizer=regularizers.l2(l2), 
-                    activity_regularizer=regularizers.l1(l1)))
- 
-    
-    model.add(Dense(OUTPUT, activation='softmax'))
-    
-    opt = Adam(lr=0.01)
-    
-    model.compile(optimizer=opt, 
-            loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-    
-    return model
-
-def model_rewired(layers):
-    
-    
-    inp = Input(shape=(INPUT,))
-    
-    
-    #first layer
-    l1 = Dense(NUM_NODES, activation='relu')(inp)
-    
-    #second
-    l2 = CustomConnected(NUM_NODES, connections=layers[5], activation='relu')(l1)
-    z = concatenate([l1, l2])
-    
-    #third
-    l3 = CustomConnected(NUM_NODES, connections=layers[4], activation='relu')(z)
-    z = concatenate([z,l3])
-    
-    #forth 
-    l4 = CustomConnected(NUM_NODES,connections=layers[3], activation='relu')(z)
-    z = concatenate([z, l4])
-    
-    #fifth
-    l5 = CustomConnected(NUM_NODES, connections=layers[2], activation='relu')(z)
-    z = concatenate([z, l5])
-    
-    #sixth
-    l6 = CustomConnected(NUM_NODES, connections=layers[1], activation='relu')(z)
-    z = concatenate([z, l6])
-    
-    
-    #output
-    out = CustomConnected(OUTPUT, connections=layers[0], activation='softmax')(z)
-    
-    model = Model(inp, out)
-    model.compile(optimizer=optimizer, 
-                  loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-    
-    return model
-
-
-def model_rewired_weight_reg(layers):
-
-    la1 = 1e-05
-    la2 = 1e-05
-
-    inp = Input(shape=(INPUT,))
-    
-    
-    #first layer
-    l1 = Dense(NUM_NODES, activation='relu', kernel_regularizer=regularizers.l2(la2), 
-                    activity_regularizer=regularizers.l1(la1))(inp)
-    
-    #second
-    l2 = CustomConnected(NUM_NODES, connections=layers[5], activation='relu', kernel_regularizer=regularizers.l2(la2), 
-                    activity_regularizer=regularizers.l1(la1))(l1)
-    z = concatenate([l1, l2])
-    
-    #third
-    l3 = CustomConnected(NUM_NODES, connections=layers[4], activation='relu', kernel_regularizer=regularizers.l2(la2), 
-                    activity_regularizer=regularizers.l1(la1))(z)
-    z = concatenate([z,l3])
-    
-    #forth 
-    l4 = CustomConnected(NUM_NODES,connections=layers[3], activation='relu', kernel_regularizer=regularizers.l2(la2), 
-                    activity_regularizer=regularizers.l1(la1))(z)
-    z = concatenate([z, l4])
-    
-    #fifth
-    l5 = CustomConnected(NUM_NODES, connections=layers[2], activation='relu', kernel_regularizer=regularizers.l2(la2), 
-                    activity_regularizer=regularizers.l1(la1))(z)
-    z = concatenate([z, l5])
-    
-    #sixth
-    l6 = CustomConnected(NUM_NODES, connections=layers[1], activation='relu', kernel_regularizer=regularizers.l2(la2), 
-                    activity_regularizer=regularizers.l1(la1))(z)
-    z = concatenate([z, l6])
-    
-    
-    #output
-    out = CustomConnected(OUTPUT, connections=layers[0], activation='softmax')(z)
-    
-    model = Model(inp, out)
-    opt = Adam(lr=0.01)
-    model.compile(optimizer=opt, 
-                  loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-    
-    return model
-
-def model_rewired_dropout(layers):
-    
-    dropout = 0.1
- 
-    #input layer
-    inp = Input(shape=(INPUT,))
-    dinp = Dropout(0.1)(inp)
-    
-    #first layer
-    l1 = Dense(NUM_NODES, activation='relu', kernel_constraint=maxnorm(4))(dinp)
-    d1 = Dropout(dropout)(l1)
-    
+     
     #second layer
-    l2 = CustomConnected(NUM_NODES, connections=layers[5], activation='relu', kernel_constraint=maxnorm(4))(d1)
-    z = concatenate([l1,l2])
-    d2 = Dropout(dropout)(z)
+    mat2 = np.ones((NUM_NODES, NUM_NODES))
     
     #third layer
-    l3 = CustomConnected(NUM_NODES, connections=layers[4], activation='relu', kernel_constraint=maxnorm(4))(d2)
-    z = concatenate([z, l3])
-    d3 = Dropout(dropout)(z)
+    mat3 = np.zeros((NUM_NODES*2, NUM_NODES))
+    mat3[NUM_NODES:,:] = 1
     
-    #fourth layer
-    l4 = CustomConnected(NUM_NODES, connections=layers[3], activation='relu', kernel_constraint=maxnorm(4))(d3)
-    z = concatenate([z, l4])
-    d4 = Dropout(dropout)(z)
+    #forth layer
+    mat4 = np.zeros((NUM_NODES*3, NUM_NODES))
+    mat4[NUM_NODES*2:,:] = 1
     
     #fifth layer
-    l5 = CustomConnected(NUM_NODES, connections=layers[2], activation='relu', kernel_constraint=maxnorm(4))(d4)
-    z = concatenate([z, l5])
-    d5 = Dropout(dropout)(z)
-    
-    #sixth layer
-    l6 = CustomConnected(NUM_NODES, connections=layers[1], activation='relu', kernel_constraint=maxnorm(4))(d5)
-    z = concatenate([z, l6])
-    d6 = Dropout(dropout)(z)
-    
+    mat5 = np.zeros((NUM_NODES*4, NUM_NODES))
+    mat5[NUM_NODES*3:,:] = 1
+        
     #output layer
-    out = CustomConnected(OUTPUT, connections=layers[0], activation='softmax')(d6)
-    
-    model = Model(inp,out)
-    
-    opt = Adam(lr=0.001)
-    
-    model.compile(optimizer=opt, 
-            loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-    
-    return model
-    
-
-def test_model(model, X_train, y_train, X_test, y_test):
-    """
-    Trains keras model
-    ::param model:: keras model
-    ::output history:: keras history object
-    """
-    
-    #train model
-    history = model.fit(X_train, y_train, epochs=EPOCHS, verbose=1,
-                        batch_size=128, validation_data=(X_test, y_test))
-    
-    return history
-
-def model_orig1(obs_space, num_outputs):
+    mat6 = np.zeros((NUM_NODES*5, num_outputs))
+    mat6[NUM_NODES*4:,:] = 1
         
-    #input layer
-    input_layer = Input(shape=(obs_space,), name="observation")
+    #model = Model(input_layer, layer_out)
+    layers = [mat6, mat5, mat4, mat3, mat2]
         
-    #first layer
-    mat1 = np.ones((obs_space, NUM_NODES))
-    layer_1 = CustomConnected(NUM_NODES, connections=mat1, activation='tanh')(input_layer)
-    z = concatenate([input_layer, layer_1])
-      
+    return layers
+    
+    
+def model_orig_value():
+        
+        
     #second layer
-    mat2 = np.zeros((obs_space+NUM_NODES, NUM_NODES))
-    mat2[obs_space:,:] = 1
-    layer_2 = CustomConnected(NUM_NODES, connections=mat2, activation='tanh')(z)
-    z = concatenate([z, layer_2])
+    mat2 = np.ones((NUM_NODES, NUM_NODES))
+
+    #third layer
+    mat3 = np.zeros((NUM_NODES*2, NUM_NODES))
+    mat3[NUM_NODES:,:] = 1
+    
+    #forth layer
+    mat4 = np.zeros((NUM_NODES*3, NUM_NODES))
+    mat4[NUM_NODES*2:,:] = 1
+    
+    #fifth layer
+    mat5 = np.zeros((NUM_NODES*4, NUM_NODES))
+    mat5[NUM_NODES*3:,:] = 1
         
     #output layer
-    mat3 = np.zeros((obs_space+NUM_NODES*2, num_outputs))
-    mat3[obs_space+NUM_NODES:,:] = 1
-    layer_out = CustomConnected(num_outputs, connections=mat3, activation=None)(z)
-       
-    model = Model(input_layer, layer_out)
-    layers = [mat3, mat2, mat1]
-      
-    return model, layers 
+    mat6 = np.zeros((NUM_NODES*5, 1))
+    mat6[NUM_NODES*2:,:] = 1
 
-if __name__ == "__main__":
+        
+   # model = Model(input_layer, layer_out)
+    layers = [mat6, mat5, mat4, mat3, mat2]
+        
+    return layers
+
+
+class CustomConnected(Dense):
     
-    model, layers = model_orig1(4, 2)
-    mat = ann_to_graph(layers)
-    swmat = rewire_num_connections(mat, layers, 400)
-    new_layers = graph_to_ann(swmat, layers)
-    #model = model_rewired(new_layers)
+    def __init__(self, units, connections, **kwargs):
+        
+        # connection matrix
+        self.connections = connections
+        
+        super(CustomConnected, self).__init__(units,**kwargs)
+                
+    def call(self, inputs):
+        output = K.dot(inputs, self.kernel * self.connections)
+        if self.use_bias:
+            output = K.bias_add(output, self.bias)
+        if self.activation is not None:
+            output = self.activation(output)
+        return output
     
+    def build(self, input_shape):
+        super(CustomConnected, self).build(input_shape)
+        weights = self.get_weights()
+        weights[0] = self.get_weights()[0] * self.connections
+        self.set_weights(weights)
     
 
-#    x,y =load_csv(PATHDRIVE, NUMBER_OF_ATTRIBUTES)
-#    #x = normalize(x)
-#    
-#    
-#    #convert labels to integers
-#    y = classes_to_int(y)
-#
-#    #split to trainign and testing data
-#    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=TEST_SIZE)
-#    X_test = X_test[0:1000]
-#    y_test = y_test[0:1000]
-#    
-#
-#    model, layers = model_orig()
-#    mat = ann_to_graph(layers)
-#    
-#        
-#    index = []
-#    data = []
-#    modelss = []
-#    accu = []
-#    
-#    # Dense
-#    for i in range(NUM_MODELS):
-#        
-#        
-#        
-#        model = model_dense()
-#        
-#        history = test_model(model, X_train, y_train, X_test, y_test)
-#        
-#        index = index + list(range(0, EPOCHS))
-#        data = data + history.history['val_acc']
-#        modelss = modelss + ["Dense"] * EPOCHS
-#        accu = accu + history.history['acc']
-#
-#
-#    dataframe = pd.DataFrame((index,data), dtype=float).T
-#    dataframe.columns=["epochs", "Test accuracy"]
-#    dataframe['Model'] = modelss
-#    
-#    dataframe_acc = pd.DataFrame((index, accu)).T
-#    dataframe_acc.columns=["epochs", "Train accuracy"]
-#    dataframe_acc['Model'] = modelss
-#    
-#
-#    modelss = []
-#    index = []
-#    data = []
-#    accu = []
-#    
-#    #dropout
-#    for i in range(NUM_MODELS):
-#        
-#               
-#        model = model_dropout()
-#        
-#        history = test_model(model, X_train, y_train, X_test, y_test)
-#        
-#        index = index + list(range(0, EPOCHS))
-#        data = data + history.history['val_acc']
-#        modelss = modelss + ["Dropout"] * EPOCHS
-#        accu = accu + history.history['acc']
-#        
-#
-#    p = pd.DataFrame((index,data)).T
-#    p.columns=["epochs", "Test accuracy"]
-#    p['Model'] = modelss
-#    
-#    d = pd.DataFrame((index,accu)).T
-#    d.columns=["epochs", "Train accuracy"]
-#    d['Model'] = modelss
-#    
-#    dataframe_acc = dataframe_acc.append(d)
-#    
-#    dataframe = dataframe.append(p)
-#    
-#    
-#    modelss = []
-#    index = []
-#    data = []
-#    accu = []
-#        
-#
-#    #dropout 0
-#    for i in range(NUM_MODELS):
-#        
-#               
-#        model = model_dropout_0()
-#        
-#        history = test_model(model, X_train, y_train, X_test, y_test)
-#        
-#        index = index + list(range(0, EPOCHS))
-#        data = data + history.history['val_acc']
-#        modelss = modelss + ["Dropout 0"] * EPOCHS
-#        accu = accu + history.history['acc']
-#        
-#
-#    p = pd.DataFrame((index,data)).T
-#    p.columns=["epochs", "Test accuracy"]
-#    p['Model'] = modelss
-#    
-#    d = pd.DataFrame((index,accu)).T
-#    d.columns=["epochs", "Train accuracy"]
-#    d['Model'] = modelss
-#    
-#    dataframe_acc = dataframe_acc.append(d)
-#    
-#    dataframe = dataframe.append(p)
-#    
-#        
-#
-#    plot_testacc= sns.lineplot(x="epochs", y="Test accuracy", hue='Model', data=dataframe)
-#    plt.show()
-#    plot_trainacc = sns.lineplot(x="epochs", y="Train accuracy", hue='Model', data=dataframe_acc)
-#    plt.show()
+class DenseModel(TFModelV2):
+    def __init__(self,  obs_space, action_space, num_outputs, 
+                 model_config, name):
+        super(DenseModel, self).__init__(obs_space, action_space, 
+             num_outputs, model_config, name)
+        
+        input_layer = Input(shape=obs_space.shape, name="observations")
+        
+        layer_1 = Dense(NUM_NODES, activation='tanh', 
+                        kernel_initializer=normc_initializer(1.0))(input_layer)
+        value_1 = Dense(NUM_NODES, activation='tanh',
+                        kernel_initializer=normc_initializer(1.0))(input_layer)
+        
+        layer_2 = Dense(NUM_NODES, activation='tanh',
+                        kernel_initializer=normc_initializer(1.0))(layer_1)
+        value_2 = Dense(NUM_NODES, activation='tanh',
+                        kernel_initializer=normc_initializer(1.0))(value_1)
+        
+        layer_3 = Dense(NUM_NODES, activation='tanh',
+                        kernel_initializer=normc_initializer(1.0))(layer_2)
+        value_3 = Dense(NUM_NODES, activation='tanh',
+                        kernel_initializer=normc_initializer(1.0))(value_2)
+        
+        layer_4 = Dense(NUM_NODES, activation='tanh',
+                        kernel_initializer=normc_initializer(1.0))(layer_3)
+        value_4 = Dense(NUM_NODES, activation='tanh',
+                        kernel_initializer=normc_initializer(1.0))(value_3)
+        
+        layer_5 = Dense(NUM_NODES, activation='tanh',
+                        kernel_initializer=normc_initializer(1.0))(layer_4)
+        value_5 = Dense(NUM_NODES, activation='tanh',
+                        kernel_initializer=normc_initializer(1.0))(value_4)
+        
+        layer_out = Dense(num_outputs, activation=None,
+                          kernel_initializer=normc_initializer(0.01))(layer_5)
+        value_out = Dense(1, activation=None,
+                          kernel_initializer=normc_initializer(0.01))(value_5)
+        self.base_model = Model(input_layer, [layer_out, value_out])
+        
+        self.register_variables(self.base_model.variables)
+            
+    def forward(self, input_dict, state, seq_lens):
+        model_out, self._value_out = self.base_model(input_dict["obs"])
+        return model_out, state
+        
+    def value_function(self):
+        return tf.reshape(self._value_out, [-1])
+    
+    def metrics(self):
+        return {"foo": tf.constant(42.0)}
 
+
+class SmallWorldModel(TFModelV2):
+
+    def __init__(self, obs_space, action_space, num_outputs,
+                 model_config, name):
+        super(SmallWorldModel, self).__init__(obs_space, action_space,
+             num_outputs, model_config, name)
+
+        layers = model_orig(obs_space, num_outputs)
+#        value_layers = model_orig_value()
+
+        mat = ann_to_graph(layers, num_outputs)
+
+        swmat = rewire_num_connections(mat, layers, 0)
+#        value_mat = ann_to_graph(value_layers, 1)
+#        swmat_value = rewire_num_connections(value_mat, value_layers, 1000)
+#        value_layers = graph_to_ann(swmat_value, value_layers)
+#        change_glob_value(value_layers)
+        
+        layers = graph_to_ann(swmat, layers)
+
+        #input laye
+        input_layer = Input(shape=obs_space.shape)
+
+        #first layer
+        layer_1 = Dense(NUM_NODES, activation='tanh',
+                                  kernel_initializer=normc_initializer(1.0))(input_layer)
+        value_1 = Dense(NUM_NODES, activation='tanh',
+                                  kernel_initializer=normc_initializer(1.0))(input_layer)
+
+        #second layer
+        layer_2 = CustomConnected(NUM_NODES, connections=layers[4], activation='tanh',
+                                  kernel_initializer=normc_initializer(1.0))(layer_1)
+        value_2 = CustomConnected(NUM_NODES, connections=VALUE_LAYERS[4], activation='tanh',
+                                  kernel_initializer=normc_initializer(1.0))(value_1)
+        z1_layer = concatenate([layer_1, layer_2])
+        z1_value = concatenate([value_1, value_2])
+
+        #third layer
+        layer_3 = CustomConnected(NUM_NODES, connections=layers[3], activation='tanh',
+                                  kernel_initializer=normc_initializer(1.0))(z1_layer)
+        value_3 = CustomConnected(NUM_NODES, connections=VALUE_LAYERS[3], activation='tanh',
+                                  kernel_initializer=normc_initializer(1.0))(z1_value)
+        z2_layer = concatenate([z1_layer, layer_3])
+
+        z2_value = concatenate([z1_value, value_3])
+
+        #forth layer
+        layer_4 = CustomConnected(NUM_NODES, connections=layers[2], activation='tanh',
+                                  kernel_initializer=normc_initializer(1.0))(z2_layer)
+        value_4 = CustomConnected(NUM_NODES, connections=VALUE_LAYERS[2], activation='tanh',
+                                  kernel_initializer=normc_initializer(1.0))(z2_value)
+        z3_layer = concatenate([z2_layer, layer_4])
+        z3_value = concatenate([z2_value, value_4])
+
+        #fifth layer
+        layer_5 = CustomConnected(NUM_NODES, connections=layers[1], activation='tanh',
+                                  kernel_initializer=normc_initializer(1.0))(z3_layer)
+        value_5 = CustomConnected(NUM_NODES, connections=VALUE_LAYERS[1], activation='tanh',
+                                  kernel_initializer=normc_initializer(1.0))(z3_value)
+        z4_layer = concatenate([z3_layer, layer_5])
+        z4_value = concatenate([z3_value, value_5])
+
+        #output layer
+        layer_out = CustomConnected(num_outputs, connections=layers[0], activation=None,
+                                    kernel_initializer=normc_initializer(0.01))(z4_layer)
+        value_out = CustomConnected(1, connections=VALUE_LAYERS[0], activation=None,
+                                    kernel_initializer=normc_initializer(0.01))(z4_value)
+
+        self.base_model = Model(input_layer, [layer_out, value_out])
+        
+        self.register_variables(self.base_model.variables)
+        
+        
+    def forward(self, input_dict, state, seq_lens):
+        model_out, self._value_out = self.base_model(input_dict["obs"])
+        return model_out, state
+        
+    
+    def value_function(self):
+        return tf.reshape(self._value_out, [-1])
+    
+    
+    def metrics(self):
+        return {"foo": tf.constant(42.0)}
+
+
+if __name__== "__main__":
+
+    random.seed(a=NET_SEED)
+    value_layers = model_orig_value()
+    value_mat = ann_to_graph(value_layers, 1)
+    swmat_value = rewire_num_connections(value_mat, value_layers, 1000)
+    value_layers = graph_to_ann(swmat_value, value_layers)
+
+    
+
+    change_glob_value(value_layers)
+    
+    ModelCatalog.register_custom_model(
+            "keras_model", SmallWorldModel)
+    
+    c = VALUE_LAYERS
+    tune.run(
+            run_or_experiment=PPOTrainer,
+            verbose=1,
+            stop={"training_iteration": 300},
+            name="BipedalWalker dense",
+            config={                    
+                    "env": "BipedalWalker-v3",
+                    "framework": "tf",
+                    "seed" : SEED,
+                    "model": {
+                            "custom_model" : "keras_model",
+                            },                   
+                    })
+
+    
+    
+    

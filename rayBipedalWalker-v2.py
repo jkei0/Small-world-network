@@ -11,6 +11,7 @@ import tensorflow as tf
 import ray
 from ray import tune
 from ray.rllib.agents.ppo import PPOTrainer
+from ray.rllib.agents.sac import SACTrainer
 from ray.rllib.models import ModelCatalog
 from ray.rllib.models.tf.tf_modelv2 import TFModelV2
 from tensorflow.keras.layers import Dense, Input, concatenate
@@ -312,11 +313,8 @@ class SmallWorldModel(TFModelV2):
         mat = ann_to_graph(layers, num_outputs)
         value_mat = ann_to_graph(value_layers, 1)
         
-        swmat = rewire_num_connections(mat, layers, 1000)
+        swmat = rewire_num_connections(mat, layers, 0)
         swmat_value = rewire_num_connections(value_mat, value_layers, 1000)
-        
-#        swmat = rewire_to_smallworld(mat, layers, 0.6)
-#        swmat_value = rewire_to_smallworld(value_mat, value_layers, 0.0)
         
         layers = graph_to_ann(swmat, layers)
         value_layers = graph_to_ann(swmat_value, value_layers)
@@ -392,6 +390,7 @@ if __name__== "__main__":
     
     ModelCatalog.register_custom_model(
             "keras_model", DenseModel)
+    
     
     tune.run(
             run_or_experiment=PPOTrainer,
